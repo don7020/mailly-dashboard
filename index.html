@@ -118,6 +118,16 @@ tr:hover td { background: #1a1d24; }
 .export-btns { display: flex; gap: 6px; margin-left: auto; }
 .export-btn { background: none; border: 1px solid #3a3d45; color: #777; padding: 4px 11px; border-radius: 5px; cursor: pointer; font-size: 11px; transition: all 0.15s; white-space: nowrap; }
 .export-btn:hover { border-color: #4ade80; color: #4ade80; }
+
+/* ── Dynamic Matrix 축 선택 */
+.matrix-axis-bar { display:flex; align-items:flex-end; gap:20px; margin-bottom:18px; flex-wrap:wrap; }
+.axis-group { display:flex; flex-direction:column; gap:6px; }
+.axis-label { font-size:11px; color:#555; text-transform:uppercase; letter-spacing:0.5px; }
+.axis-chips { display:flex; gap:6px; flex-wrap:wrap; }
+.axis-chip { background:#1e2128; border:1px solid #3a3d45; padding:5px 12px; border-radius:20px; cursor:pointer; font-size:12px; color:#aaa; transition:all 0.15s; user-select:none; }
+.axis-chip:hover { border-color:#ff6b00; color:#ff8c33; }
+.axis-chip.active { background:rgba(255,107,0,0.15); border-color:#ff6b00; color:#ff8c33; font-weight:700; }
+.axis-sep { font-size:22px; color:#444; padding-bottom:2px; }
 </style>
 </head>
 <body>
@@ -323,6 +333,30 @@ tr:hover td { background: #1a1d24; }
       <div class="note" style="margin-top:-10px;margin-bottom:20px">
         인스타 팔로워 / 네이버 관심고객 수치는 수신자마스터 시트에 <strong style="color:#888">인스타팔로워</strong>, <strong style="color:#888">네이버관심고객</strong> 컬럼을 추가하면 자동으로 집계됩니다.
       </div>
+
+      <div class="section">
+        <div class="section-title">
+          Dynamic Matrix — 축별 오픈율
+          <div class="export-btns">
+            <button class="export-btn" onclick="exportDynMatrix(true)">↓ 필터 기준</button>
+            <button class="export-btn" onclick="exportDynMatrix(false)">↓ 전체</button>
+          </div>
+        </div>
+        <div class="matrix-axis-bar">
+          <div class="axis-group">
+            <div class="axis-label">행 (Row)</div>
+            <div class="axis-chips" id="dyn-row-chips"></div>
+          </div>
+          <div class="axis-sep">×</div>
+          <div class="axis-group">
+            <div class="axis-label">열 (Col)</div>
+            <div class="axis-chips" id="dyn-col-chips"></div>
+          </div>
+        </div>
+        <div id="dyn-matrix-container"><div class="no-data">데이터 로딩 중…</div></div>
+        <div class="note" style="margin-top:10px">셀 색상: <span style="color:#4ade80">■</span> 60%↑ &nbsp;<span style="color:#fbbf24">■</span> 35~60% &nbsp;<span style="color:#f87171">■</span> 35%↓ &nbsp;·&nbsp; n=2 흐리게 &nbsp;·&nbsp; n=1 이하 – 처리</div>
+      </div>
+
     </div><!-- /tab-brand -->
 
   </div><!-- /dashboard -->
@@ -333,7 +367,7 @@ tr:hover td { background: #1a1d24; }
 // 상수 및 전역 상태
 // ═══════════════════════════════════════════════════
 const API_URL = 'https://script.google.com/macros/s/AKfycbz3Gart_y8YJ8BkE8gm63sJgbik0BIAM6d8BkmPRXAl2kXtZjeTXfdRtKfe6-uqWz8/exec';
-const COPY_ELS = ['브랜드 태그','수신자 개인화','타겟 명시','제품명 포함','CTA 명확','긴급성/마감','숫자/수치 포함'];
+let COPY_ELS = []; // runtime 자동 감지 (detectCopyEls)
 const INSTA_RANGES = ['~500','500~1K','1K~3K','3K~5K','5K~7K','7K~1만','1만+'];
 const NAVER_RANGES = ['~50','50~200','200~500','500~1K','1K~2K','2K~5K','5K+'];
 const DAY_ORDER = ['월','화','수','목','금','토','일'];
@@ -353,6 +387,25 @@ let brandSortState = { col: 'openRate', dir: 'desc' };
 // ═══════════════════════════════════════════════════
 // API
 // ═══════════════════════════════════════════════════
+
+// ─── 카피요소 자동 감지 ───────────────────────────────
+// 발송이메일목록에서 값이 Y/N으로만 구성된 컬럼을 찾아 COPY_ELS 세팅
+const _COPY_NON_COLS = new Set([
+  '캠페인ID','발송일','발송일시','카테고리','이메일 제목','비고','구분',
+  '오픈율 (외부)','클릭수','수신자수','발송횟수','발송수','수신자','브랜드명',
+  '브랜드','오픈여부','클릭여부','회신여부','발송시간대','요일','시간대','시간','날짜',
+]);
+function detectCopyEls(rows) {
+  if (!rows.length) return;
+  const keys = Object.keys(rows[0]).filter(k => !_COPY_NON_COLS.has(k));
+  COPY_ELS = keys.filter(k => {
+    const vals = rows.map(r => String(r[k]||'').trim().toUpperCase()).filter(v => v);
+    if (!vals.length) return false;
+    const yn = vals.filter(v => v==='Y'||v==='N').length;
+    return yn / vals.length >= 0.8; // 80% 이상 Y/N이면 카피요소
+  });
+}
+
 async function fetchSheet(sheetName) {
   const res = await fetch(`${API_URL}?sheet=${encodeURIComponent(sheetName)}`);
   if (!res.ok) throw new Error(`fetch 실패 (${res.status})`);
@@ -854,9 +907,11 @@ function renderBrandFilters() {
   const cats=[...new Set(allBrandRecords.map(r=>r.category).filter(v=>v&&v!=='내부'))].sort((a,b)=>a==='기타'?1:b==='기타'?-1:a.localeCompare(b,'ko'));
   document.getElementById('brand-cat-chips').innerHTML=cats.map(cat=>`<label class="cat-chip" data-val="${cat}" onclick="toggleBrandCat(this)">${cat}</label>`).join('');
   document.getElementById('brand-insta-chips').innerHTML=INSTA_RANGES.map(r=>`<div class="size-chip" data-val="${r}" onclick="toggleBrandInsta(this)">${r}</div>`).join('');
+  document.getElementById('brand-naver-chips').innerHTML=NAVER_RANGES.map(r=>`<div class="size-chip" data-val="${r}" onclick="toggleBrandNaver(this)">${r}</div>`).join('');
 }
 function toggleBrandCat(el)   {el.classList.toggle('active'); applyBrandFilters();}
 function toggleBrandInsta(el) {el.classList.toggle('active'); applyBrandFilters();}
+function toggleBrandNaver(el)  {el.classList.toggle('active'); applyBrandFilters();}
 
 // ═══════════════════════════════════════════════════
 // 브랜드 분석 탭 — 필터 적용
@@ -867,6 +922,7 @@ function getBrandFilters() {
     dateEnd:         document.getElementById('bDateEnd').value,
     activeCats:      [...document.querySelectorAll('#brand-cat-chips .cat-chip.active')].map(el=>el.dataset.val),
     activeInstaRngs: [...document.querySelectorAll('#brand-insta-chips .size-chip.active')].map(el=>el.dataset.val),
+    activeNaverRngs: [...document.querySelectorAll('#brand-naver-chips .size-chip.active')].map(el=>el.dataset.val),
   };
 }
 function setBrandPreset(el) {
@@ -887,12 +943,13 @@ function resetBrandFilters(){
 }
 function applyBrandFilters() {
   brandPage=1;
-  const {dateStart,dateEnd,activeCats,activeInstaRngs}=getBrandFilters();
+  const {dateStart,dateEnd,activeCats,activeInstaRngs,activeNaverRngs}=getBrandFilters();
   let records=allBrandRecords;
   if(dateStart||dateEnd) records=records.filter(r=>{ if(dateStart&&r.sendDate<dateStart)return false; if(dateEnd&&r.sendDate>dateEnd)return false; return true; });
   let brands=aggregateBrands(records);
   if(activeCats.length)      brands=brands.filter(b=>activeCats.includes(b.category));
   if(activeInstaRngs.length) brands=brands.filter(b=>activeInstaRngs.includes(b.instaRng));
+  if(activeNaverRngs.length)  brands=brands.filter(b=>activeNaverRngs.includes(b.naverRng));
   brands.sort((a,x)=>{ const {col,dir}=brandSortState, va=a[col]??-1, vb=x[col]??-1; return dir==='desc'?vb-va:va-vb; });
   filteredBrandsCache=brands;
   // 필터된 브랜드명 기준 records 좁힘 → KPI 계산에 사용
@@ -903,6 +960,8 @@ function applyBrandFilters() {
   renderBrandInstaChart(filteredBrandRecordsCache);
   renderBrandDayChart(filteredBrandRecordsCache);
   renderBrandCopyChart(filteredBrandRecordsCache);
+  renderDynAxisChips();
+  renderDynamicMatrix(filteredBrandRecordsCache);
   renderBrandTable(brands);
   const countEl=document.getElementById('brand-filter-count');
   if(countEl) countEl.textContent=`${brands.length}개 브랜드`;
@@ -926,7 +985,9 @@ function renderBrandTable(brands) {
     {label:'인스타 규모',key:null},{label:'네이버 관심',key:null},
     {label:'발송횟수',key:'sent',sort:true},
     {label:'오픈율',key:'openRate',sort:true},
+    {label:'오픈수',key:'opened',sort:true},
     {label:'클릭율',key:'clickRate',sort:true},
+    {label:'클릭수',key:'clicked',sort:true},
     {label:'최적 요일',key:null},{label:'발송 시간대',key:null},{label:'최적 카피요소',key:null},
   ];
   document.getElementById('brand-table-head').innerHTML='<tr>'+headerCols.map(col=>{ if(!col.sort)return `<th>${col.label}</th>`; const cls=brandSortState.col===col.key?`sort-${brandSortState.dir}`:''; return `<th class="sortable ${cls}" onclick="sortBrandBy('${col.key}')">${col.label}</th>`; }).join('')+'</tr>';
@@ -946,7 +1007,9 @@ function renderBrandTable(brands) {
       <td style="font-size:12px;color:#888">${b.naverRng||'–'}</td>
       <td style="text-align:right;color:#aaa">${b.sent}</td>
       <td class="${rateClass(b.openRate)}">${openDisp}</td>
+      <td style="color:#aaa">${b.openRate!==null?b.opened:'–'}</td>
       <td class="${rateClass(b.clickRate)}">${clickDisp}</td>
+      <td style="color:#aaa">${b.clickRate!==null?b.clicked:'–'}</td>
       <td style="color:#aaa;text-align:center">${b.bestDay}</td>
       <td style="color:#aaa;text-align:center">${b.bestTime||'–'}</td>
       <td style="font-size:11px;color:#777" title="${b.bestCopy}">${bestCopyShort}</td>
@@ -956,6 +1019,117 @@ function renderBrandTable(brands) {
 }
 
 
+
+
+// ═══════════════════════════════════════════════════
+// Dynamic Matrix — 상수 및 상태
+// ═══════════════════════════════════════════════════
+const AXIS_OPTIONS = [
+  { key:'category',  label:'카테고리' },
+  { key:'instaRng',  label:'인스타 규모' },
+  { key:'naverRng',  label:'네이버 규모' },
+  { key:'dayOfWeek', label:'요일' },
+  { key:'timeSlot',  label:'시간대' },
+];
+let dynMatRow = 'instaRng';   // 기본값: 인스타 규모
+let dynMatCol = 'dayOfWeek';  // 기본값: 요일
+
+function getAxisVal(r, key) {
+  if (key === 'category')  return r.category  || '기타';
+  if (key === 'instaRng')  return r.instaRng  || '';
+  if (key === 'naverRng')  return r.naverRng  || '';
+  if (key === 'dayOfWeek') return r.dayOfWeek || '';
+  if (key === 'timeSlot')  return r.timeSlot  || '';
+  return '';
+}
+function getAxisOrder(key, valueSet) {
+  if (key === 'instaRng')  return INSTA_RANGES.filter(v => valueSet.has(v));
+  if (key === 'naverRng')  return NAVER_RANGES.filter(v => valueSet.has(v));
+  if (key === 'dayOfWeek') return DAY_ORDER.filter(v => valueSet.has(v));
+  return [...valueSet].filter(v=>v).sort((a,b)=>a==='기타'?1:b==='기타'?-1:a.localeCompare(b,'ko'));
+}
+function getAxisLabel(key) { return (AXIS_OPTIONS.find(o=>o.key===key)||{}).label||key; }
+
+// ─ 축 칩 UI 렌더
+function renderDynAxisChips() {
+  const makeChips = (type, activeKey) =>
+    AXIS_OPTIONS.map(o =>
+      `<div class="axis-chip${o.key===activeKey?' active':''}" onclick="setDynAxis('${type}','${o.key}')">${o.label}</div>`
+    ).join('');
+  document.getElementById('dyn-row-chips').innerHTML = makeChips('row', dynMatRow);
+  document.getElementById('dyn-col-chips').innerHTML = makeChips('col', dynMatCol);
+}
+
+function setDynAxis(type, key) {
+  if (type === 'row') {
+    if (key === dynMatCol) dynMatCol = dynMatRow; // swap
+    dynMatRow = key;
+  } else {
+    if (key === dynMatRow) dynMatRow = dynMatCol; // swap
+    dynMatCol = key;
+  }
+  renderDynAxisChips();
+  renderDynamicMatrix(filteredBrandRecordsCache);
+}
+
+// ─ 매트릭스 렌더
+function renderDynamicMatrix(records) {
+  const container = document.getElementById('dyn-matrix-container');
+  if (!container) return;
+  if (!records.length) { container.innerHTML = '<div class="no-data">데이터 없음</div>'; return; }
+
+  const rowSet = new Set(), colSet = new Set();
+  records.forEach(r => { const rv=getAxisVal(r,dynMatRow), cv=getAxisVal(r,dynMatCol); if(rv)rowSet.add(rv); if(cv)colSet.add(cv); });
+
+  const rowVals = getAxisOrder(dynMatRow, rowSet);
+  const colVals = getAxisOrder(dynMatCol, colSet);
+  if (!rowVals.length || !colVals.length) { container.innerHTML='<div class="no-data">데이터 없음</div>'; return; }
+
+  // 집계
+  const mat = {};
+  records.forEach(r => {
+    const rv=getAxisVal(r,dynMatRow), cv=getAxisVal(r,dynMatCol);
+    if(!rv||!cv) return;
+    if(!mat[rv]) mat[rv]={};
+    if(!mat[rv][cv]) mat[rv][cv]={opened:0,total:0};
+    mat[rv][cv].total++;
+    if(r.opened) mat[rv][cv].opened++;
+  });
+
+  let h = '<div class="matrix-wrap"><table class="matrix-table"><thead><tr>';
+  h += `<th class="matrix-th-label">${getAxisLabel(dynMatRow)} \ ${getAxisLabel(dynMatCol)}</th>`;
+  colVals.forEach(cv => { h += `<th>${cv}</th>`; });
+  h += '</tr></thead><tbody>';
+  rowVals.forEach(rv => {
+    h += `<tr><td class="matrix-row-label">${rv}</td>`;
+    colVals.forEach(cv => {
+      const d = mat[rv]?.[cv];
+      if (!d || d.total < 2) { h += '<td class="matrix-cell empty">–</td>'; return; }
+      const rate=d.opened/d.total, p=(rate*100).toFixed(0);
+      const lvl=rate>=0.6?'high':rate>=0.35?'mid':'low', dim=d.total<3?' dim':'';
+      h += `<td class="matrix-cell ${lvl}${dim}" title="${rv} × ${cv}: ${d.opened}/${d.total}명 오픈"><span class="matrix-pct ${lvl}">${p}%</span><span class="matrix-n">n=${d.total}</span></td>`;
+    });
+    h += '</tr>';
+  });
+  h += '</tbody></table></div>';
+  container.innerHTML = h;
+}
+
+// ─ Dynamic Matrix 내보내기
+function exportDynMatrix(isFiltered) {
+  const records = isFiltered ? filteredBrandRecordsCache : allBrandRecords;
+  const rowSet=new Set(), colSet=new Set();
+  records.forEach(r=>{ const rv=getAxisVal(r,dynMatRow),cv=getAxisVal(r,dynMatCol); if(rv)rowSet.add(rv); if(cv)colSet.add(cv); });
+  const rowVals=getAxisOrder(dynMatRow,rowSet), colVals=getAxisOrder(dynMatCol,colSet);
+  const mat={};
+  records.forEach(r=>{ const rv=getAxisVal(r,dynMatRow),cv=getAxisVal(r,dynMatCol); if(!rv||!cv)return; if(!mat[rv])mat[rv]={}; if(!mat[rv][cv])mat[rv][cv]={opened:0,total:0}; mat[rv][cv].total++; if(r.opened)mat[rv][cv].opened++; });
+  exportSheet(
+    [getAxisLabel(dynMatRow)+' \ '+getAxisLabel(dynMatCol), ...colVals],
+    rowVals.map(rv=>[rv, ...colVals.map(cv=>{ const d=mat[rv]?.[cv]; return d&&d.total>=2?+(d.opened/d.total*100).toFixed(0)+'%':'–'; })]),
+    `데얼스_DynMatrix_${getAxisLabel(dynMatRow)}x${getAxisLabel(dynMatCol)}_${isFiltered?'필터':'전체'}`,
+    'DynamicMatrix'
+  );
+}
 
 // ═══════════════════════════════════════════════════
 // 브랜드 분석 탭 — 차트 렌더
@@ -1245,8 +1419,8 @@ function exportBrandCopyData(isFiltered) {
 function exportBrandTable(isFiltered) {
   const brands = isFiltered ? filteredBrandsCache : aggregateBrands(allBrandRecords);
   exportSheet(
-    ['브랜드명','카테고리','인스타규모','네이버관심','발송횟수','오픈율(%)','클릭율(%)','최적요일','발송시간대','최적카피요소'],
-    brands.map(b=>[b.name, b.category||'', b.instaRng||'', b.naverRng||'', b.sent, b.openRate!==null?b.openRate:'–', b.clickRate!==null?b.clickRate:'–', b.bestDay, b.bestTime||'', b.bestCopy]),
+    ['브랜드명','카테고리','인스타규모','네이버관심','발송횟수','오픈율(%)','오픈수','클릭율(%)','클릭수','최적요일','발송시간대','최적카피요소'],
+    brands.map(b=>[b.name, b.category||'', b.instaRng||'', b.naverRng||'', b.sent, b.openRate!==null?b.openRate:'–', b.openRate!==null?b.opened:'–', b.clickRate!==null?b.clickRate:'–', b.clickRate!==null?b.clicked:'–', b.bestDay, b.bestTime||'', b.bestCopy]),
     `데얼스_브랜드목록_${isFiltered?'필터':'전체'}`, '브랜드목록'
   );
 }
@@ -1262,6 +1436,7 @@ async function init() {
     const [campaigns,emailList,recipients]=await Promise.all([fetchSheet('캠페인요약'),fetchSheet('발송이메일목록'),fetchSheet('수신자마스터')]);
     if(!campaigns.length) throw new Error('캠페인요약 탭에 데이터가 없습니다.');
     allCampaigns=campaigns; allEmailList=emailList; allRecipients=recipients;
+    detectCopyEls(allEmailList);
     campPage=1; replyPage=1; brandPage=1;
     buildFilterUI(campaigns); applyFilters(); renderTop5(); renderReplyList();
     buildBrandRecords(); renderBrandFilters(); applyBrandFilters();
