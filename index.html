@@ -369,7 +369,7 @@ tr:hover td { background: #1a1d24; }
 const API_URL = 'https://script.google.com/macros/s/AKfycbz3Gart_y8YJ8BkE8gm63sJgbik0BIAM6d8BkmPRXAl2kXtZjeTXfdRtKfe6-uqWz8/exec';
 let COPY_ELS = []; // runtime 자동 감지 (detectCopyEls)
 const INSTA_RANGES = ['~500','500~1K','1K~3K','3K~5K','5K~7K','7K~1만','1만+'];
-const NAVER_RANGES = ['~50','50~200','200~500','500~1K','1K~2K','2K~5K','5K+'];
+const NAVER_RANGES = ['~500','500~1천','1천~3천','3천~1만','1만~3만','3만+'];
 const DAY_ORDER = ['월','화','수','목','금','토','일'];
 
 let allCampaigns = [], allEmailList = [], allRecipients = [];
@@ -429,11 +429,25 @@ function avg(arr) { const f = arr.filter(v => v !== null); return f.length ? f.r
 function destroyChart(id) { if (charts[id]) { charts[id].destroy(); delete charts[id]; } }
 const GRID = '#1e2128', AXIS = { color:'#666', font:{size:11} };
 
+// "1K", "1만", "1천" 등 다양한 표기를 숫자로 변환
+function _parseAnyNum(str) {
+  const s = String(str).replace(/[,+\s]/g,'');
+  if (/^\d+$/.test(s)) return parseInt(s);
+  const kM = s.match(/^(\d+(?:\.\d+)?)[Kk]/); if (kM) return Math.round(parseFloat(kM[1])*1000);
+  const manM = s.match(/^(\d+(?:\.\d+)?)만/);  if (manM) return Math.round(parseFloat(manM[1])*10000);
+  const chM  = s.match(/^(\d+(?:\.\d+)?)천/);  if (chM)  return Math.round(parseFloat(chM[1])*1000);
+  return parseInt(s);
+}
+// "A~B" 범위 레이블이면 A 기준으로 버킷 결정
+function _leadNum(s) {
+  const rng = s.match(/^([^~～]+)[~～]/);
+  return _parseAnyNum(rng ? rng[1] : s);
+}
 function instaRange(v) {
   if (!v) return '';
   const s = String(v).trim();
-  if (INSTA_RANGES.includes(s)) return s;   // 이미 레이블이면 그대로
-  const n = parseInt(s); if (!n || isNaN(n)) return '';
+  if (INSTA_RANGES.includes(s)) return s;
+  const n = _leadNum(s); if (!n || isNaN(n)) return '';
   if (n < 500) return '~500'; if (n < 1000) return '500~1K'; if (n < 3000) return '1K~3K';
   if (n < 5000) return '3K~5K'; if (n < 7000) return '5K~7K'; if (n < 10000) return '7K~1만';
   return '1만+';
@@ -441,11 +455,14 @@ function instaRange(v) {
 function naverRange(v) {
   if (!v) return '';
   const s = String(v).trim();
-  if (NAVER_RANGES.includes(s)) return s;   // 이미 레이블이면 그대로
-  const n = parseInt(s); if (!n || isNaN(n)) return '';
-  if (n < 50) return '~50'; if (n < 200) return '50~200'; if (n < 500) return '200~500';
-  if (n < 1000) return '500~1K'; if (n < 2000) return '1K~2K'; if (n < 5000) return '2K~5K';
-  return '5K+';
+  if (NAVER_RANGES.includes(s)) return s;   // 정확히 일치하면 그대로
+  const n = _leadNum(s); if (!n || isNaN(n)) return '';
+  if (n < 500)   return '~500';
+  if (n < 1000)  return '500~1천';
+  if (n < 3000)  return '1천~3천';
+  if (n < 10000) return '3천~1만';
+  if (n < 30000) return '1만~3만';
+  return '3만+';
 }
 function kpiValueClass(val) {
   const s = String(val);
