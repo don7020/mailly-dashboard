@@ -1,0 +1,1494 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>데얼스 이메일 캠페인 대시보드</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: #0d0f14; color: #e8e8e8;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans KR', sans-serif;
+  min-height: 100vh; padding: 28px 24px;
+}
+.inner { max-width: 1280px; margin: 0 auto; }
+.header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; flex-wrap: wrap; gap: 12px; }
+.header-left { display: flex; align-items: center; gap: 14px; }
+.logo { background: #ff6b00; color: #fff; font-size: 13px; font-weight: 800; padding: 6px 12px; border-radius: 6px; letter-spacing: 1px; }
+.header h1 { font-size: 18px; font-weight: 700; color: #fff; }
+.header-meta { font-size: 12px; color: #555; margin-top: 3px; }
+.refresh-btn { background: #1e2128; border: 1px solid #3a3d45; color: #aaa; padding: 8px 18px; border-radius: 6px; cursor: pointer; font-size: 13px; transition: all 0.2s; }
+.refresh-btn:hover { border-color: #ff6b00; color: #ff6b00; }
+.tab-nav { display: flex; gap: 0; margin-bottom: 22px; border-bottom: 2px solid #2a2d35; }
+.tab-btn { background: none; border: none; border-bottom: 3px solid transparent; color: #555; padding: 10px 24px; cursor: pointer; font-size: 14px; font-weight: 600; margin-bottom: -2px; transition: all 0.2s; letter-spacing: 0.2px; }
+.tab-btn:hover { color: #aaa; }
+.tab-btn.active { color: #ff6b00; border-bottom-color: #ff6b00; }
+.filter-bar { background: #16191f; border: 1px solid #2a2d35; border-radius: 10px; padding: 16px 20px; margin-bottom: 20px; display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-end; }
+.filter-group { display: flex; flex-direction: column; gap: 6px; }
+.filter-label { font-size: 11px; color: #555; text-transform: uppercase; letter-spacing: 0.5px; }
+.filter-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+input[type="date"] { background: #1e2128; border: 1px solid #3a3d45; color: #ccc; padding: 7px 10px; border-radius: 6px; font-size: 13px; cursor: pointer; }
+input[type="date"]:focus { outline: none; border-color: #ff6b00; }
+.date-sep { color: #555; font-size: 13px; }
+.cat-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.cat-chip { display: flex; align-items: center; background: #1e2128; border: 1px solid #3a3d45; padding: 5px 10px; border-radius: 20px; cursor: pointer; font-size: 12px; color: #aaa; transition: all 0.15s; user-select: none; }
+.cat-chip.active { background: rgba(255,107,0,0.15); border-color: #ff6b00; color: #ff8c33; }
+.size-chips { display: flex; flex-wrap: wrap; gap: 5px; }
+.size-chip { background: #1e2128; border: 1px solid #3a3d45; padding: 4px 10px; border-radius: 20px; cursor: pointer; font-size: 11px; color: #888; transition: all 0.15s; user-select: none; white-space: nowrap; }
+.size-chip.active { background: rgba(255,107,0,0.15); border-color: #ff6b00; color: #ff8c33; }
+.time-chips { display: flex; gap: 6px; }
+.time-chip { background: #1e2128; border: 1px solid #3a3d45; padding: 6px 14px; border-radius: 6px; cursor: pointer; font-size: 13px; color: #aaa; transition: all 0.15s; user-select: none; }
+.time-chip.active { background: rgba(255,107,0,0.15); border-color: #ff6b00; color: #ff8c33; }
+.filter-reset { background: none; border: 1px solid #3a3d45; color: #555; padding: 7px 14px; border-radius: 6px; cursor: pointer; font-size: 12px; transition: all 0.15s; align-self: flex-end; }
+.filter-reset:hover { border-color: #666; color: #aaa; }
+.preset-chips { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 6px; }
+.preset-chip { background: #1e2128; border: 1px solid #3a3d45; padding: 4px 10px; border-radius: 20px; cursor: pointer; font-size: 11px; color: #888; transition: all 0.15s; user-select: none; white-space: nowrap; }
+.preset-chip:hover { border-color: #ff6b00; color: #ff8c33; }
+.preset-chip.active { background: rgba(255,107,0,0.15); border-color: #ff6b00; color: #ff8c33; }
+.filter-count { font-size: 12px; color: #ff6b00; align-self: flex-end; padding-bottom: 2px; }
+.kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 14px; margin-bottom: 20px; }
+.kpi-card { background: #16191f; border: 1px solid #2a2d35; border-radius: 10px; padding: 18px 16px; text-align: center; }
+.kpi-label { font-size: 11px; color: #555; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px; }
+.kpi-value { font-size: 26px; font-weight: 800; color: #ff6b00; line-height: 1.2; }
+.kpi-value.kpi-md { font-size: 20px; }
+.kpi-value.kpi-sm { font-size: 15px; }
+.kpi-sub { font-size: 11px; color: #444; margin-top: 4px; }
+.section { background: #16191f; border: 1px solid #2a2d35; border-radius: 10px; padding: 22px; margin-bottom: 20px; }
+.section-title { font-size: 14px; font-weight: 700; color: #fff; margin-bottom: 18px; display: flex; align-items: center; gap: 8px; }
+.section-title::before { content: ''; display: inline-block; width: 3px; height: 14px; background: #ff6b00; border-radius: 2px; flex-shrink: 0; }
+.section-subtitle { font-size: 11px; color: #555; margin-left: auto; font-weight: 400; }
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th { background: #1e2128; color: #666; font-weight: 600; padding: 10px 12px; text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; white-space: nowrap; }
+th.sortable { cursor: pointer; user-select: none; }
+th.sortable:hover { color: #aaa; }
+th.sort-asc::after { content: ' ▲'; color: #ff6b00; }
+th.sort-desc::after { content: ' ▼'; color: #ff6b00; }
+td { padding: 10px 12px; border-bottom: 1px solid #1e2128; color: #ccc; }
+tr:last-child td { border-bottom: none; }
+tr:hover td { background: #1a1d24; }
+.cid { background: #ff6b00; color: #fff; font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 4px; white-space: nowrap; }
+.badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+.badge-cat { background: rgba(255,107,0,0.15); color: #ff8c33; }
+.badge-empty { background: #2a2d35; color: #555; }
+.rate-high { color: #4ade80; font-weight: 700; }
+.rate-mid  { color: #fbbf24; font-weight: 700; }
+.rate-low  { color: #f87171; font-weight: 700; }
+.no-data { text-align: center; color: #555; padding: 24px; font-size: 13px; }
+.chart-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
+@media (max-width: 768px) { .chart-grid { grid-template-columns: 1fr; } }
+.chart-container { position: relative; height: 260px; }
+.chart-container-tall { position: relative; height: 320px; }
+.rank-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+@media (max-width: 640px) { .rank-grid { grid-template-columns: 1fr; } }
+.rank-block-title { font-size: 12px; font-weight: 700; color: #aaa; margin-bottom: 14px; text-transform: uppercase; letter-spacing: 0.5px; }
+.rank-row { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-bottom: 1px solid #1e2128; }
+.rank-row:last-child { border-bottom: none; }
+.rank-num { width: 22px; color: #ff6b00; font-weight: 800; font-size: 15px; text-align: center; flex-shrink: 0; }
+.rank-num.top1 { color: #ffd700; } .rank-num.top2 { color: #c0c0c0; } .rank-num.top3 { color: #cd7f32; }
+.rank-name { flex: 1; color: #ccc; font-size: 13px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rank-value { color: #ff6b00; font-weight: 700; font-size: 14px; flex-shrink: 0; min-width: 36px; text-align: right; }
+#loading { display: flex; align-items: center; justify-content: center; min-height: 70vh; flex-direction: column; gap: 16px; }
+.spinner { width: 36px; height: 36px; border: 3px solid #2a2d35; border-top-color: #ff6b00; border-radius: 50%; animation: spin 0.8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.loading-text { color: #555; font-size: 14px; }
+.error-box { background: #1f1215; border: 1px solid #7f1d1d; border-radius: 10px; padding: 24px; color: #f87171; font-size: 13px; line-height: 1.9; max-width: 600px; }
+.error-box strong { color: #fca5a5; }
+.note { font-size: 12px; color: #555; margin-top: 12px; text-align: center; }
+.matrix-wrap { overflow-x: auto; }
+.matrix-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.matrix-table th { background: #1e2128; color: #666; font-weight: 600; padding: 8px 12px; text-align: center; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; white-space: nowrap; }
+.matrix-th-label { text-align: left !important; min-width: 110px; }
+.matrix-cell { text-align: center; padding: 8px 10px; border: 1px solid #13151a; }
+.matrix-cell.high { background: rgba(74,222,128,0.18); } .matrix-cell.mid { background: rgba(251,191,36,0.13); }
+.matrix-cell.low { background: rgba(248,113,113,0.13); } .matrix-cell.empty { color: #2a2d35; }
+.matrix-cell.dim { opacity: 0.45; }
+.matrix-pct { display: block; font-weight: 700; font-size: 13px; }
+.matrix-pct.high { color: #4ade80; } .matrix-pct.mid { color: #fbbf24; } .matrix-pct.low { color: #f87171; }
+.matrix-n { display: block; font-size: 10px; color: #444; margin-top: 2px; }
+.matrix-row-label { color: #ccc; text-align: left; padding: 8px 12px; background: #1a1d24; white-space: nowrap; font-size: 12px; border-bottom: 1px solid #13151a; }
+.pagination-wrap { display: flex; align-items: center; justify-content: center; gap: 6px; margin-top: 14px; flex-wrap: wrap; }
+.pg-btn { background: #1e2128; border: 1px solid #3a3d45; color: #aaa; padding: 5px 11px; border-radius: 5px; cursor: pointer; font-size: 12px; transition: all 0.15s; line-height: 1.4; }
+.pg-btn:hover:not([disabled]) { border-color: #ff6b00; color: #ff8c33; }
+.pg-btn[disabled] { opacity: 0.3; cursor: default; }
+.pg-btn.pg-active { background: rgba(255,107,0,0.15); border-color: #ff6b00; color: #ff8c33; font-weight: 700; }
+.pg-info { font-size: 11px; color: #444; padding: 0 4px; }
+.export-btns { display: flex; gap: 6px; margin-left: auto; }
+.export-btn { background: none; border: 1px solid #3a3d45; color: #777; padding: 4px 11px; border-radius: 5px; cursor: pointer; font-size: 11px; transition: all 0.15s; white-space: nowrap; }
+.export-btn:hover { border-color: #4ade80; color: #4ade80; }
+
+/* ── Dynamic Matrix 축 선택 */
+.matrix-axis-bar { display:flex; align-items:flex-end; gap:20px; margin-bottom:18px; flex-wrap:wrap; }
+.axis-group { display:flex; flex-direction:column; gap:6px; }
+.axis-label { font-size:11px; color:#555; text-transform:uppercase; letter-spacing:0.5px; }
+.axis-chips { display:flex; gap:6px; flex-wrap:wrap; }
+.axis-chip { background:#1e2128; border:1px solid #3a3d45; padding:5px 12px; border-radius:20px; cursor:pointer; font-size:12px; color:#aaa; transition:all 0.15s; user-select:none; }
+.axis-chip:hover { border-color:#ff6b00; color:#ff8c33; }
+.axis-chip.active { background:rgba(255,107,0,0.15); border-color:#ff6b00; color:#ff8c33; font-weight:700; }
+.axis-sep { font-size:22px; color:#444; padding-bottom:2px; }
+</style>
+</head>
+<body>
+<div class="inner">
+  <div id="loading"><div class="spinner"></div><div class="loading-text">데이터 불러오는 중…</div></div>
+  <div id="dashboard" style="display:none">
+
+    <div class="header">
+      <div class="header-left">
+        <div class="logo">THERES</div>
+        <div>
+          <h1>이메일 캠페인 대시보드</h1>
+          <div class="header-meta" id="last-updated">–</div>
+        </div>
+      </div>
+      <button class="refresh-btn" onclick="init()">&#8635; 새로고침</button>
+    </div>
+
+    <div class="tab-nav">
+      <button class="tab-btn active" id="tab-btn-campaign" onclick="switchTab('campaign')">이메일 캠페인</button>
+      <button class="tab-btn" id="tab-btn-brand" onclick="switchTab('brand')">브랜드 분석</button>
+    </div>
+
+    <!-- ════ TAB: 이메일 캠페인 ════ -->
+    <div id="tab-campaign">
+      <div class="filter-bar">
+        <div class="filter-group">
+          <div class="filter-label">날짜 범위</div>
+          <div class="filter-row">
+            <input type="date" id="dateStart" onchange="onDateInput()">
+            <span class="date-sep">~</span>
+            <input type="date" id="dateEnd" onchange="onDateInput()">
+          </div>
+          <div class="preset-chips">
+            <div class="preset-chip" data-preset="7d" onclick="setPreset(this)">최근 7일</div>
+            <div class="preset-chip" data-preset="30d" onclick="setPreset(this)">최근 30일</div>
+            <div class="preset-chip" data-preset="mon" onclick="setPreset(this)">이번 달</div>
+            <div class="preset-chip" data-preset="all" onclick="setPreset(this)">전체</div>
+          </div>
+        </div>
+        <div class="filter-group">
+          <div class="filter-label">카테고리</div>
+          <div class="cat-chips" id="cat-chips"></div>
+        </div>
+        <div class="filter-group">
+          <div class="filter-label">발송 시간대</div>
+          <div class="time-chips" id="time-chips"></div>
+        </div>
+        <button class="filter-reset" onclick="resetFilters()">필터 초기화</button>
+        <div class="filter-count" id="filter-count"></div>
+      </div>
+
+      <div class="kpi-grid" id="kpi-grid"></div>
+
+      <div class="section">
+        <div class="section-title">
+          캠페인 목록
+          <div class="export-btns">
+            <button class="export-btn" onclick="exportToExcel(true)">↓ 필터 기준 내보내기</button>
+            <button class="export-btn" onclick="exportToExcel(false)">↓ 전체 내보내기</button>
+          </div>
+        </div>
+        <div class="table-wrap"><table id="campaign-table"></table></div>
+        <div id="camp-pagination" class="pagination-wrap"></div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">
+          오픈 · 클릭 TOP 5 브랜드
+          <span class="section-subtitle" id="top5-label">–</span>
+          <div class="export-btns"><button class="export-btn" onclick="exportTop5(true)">↓ 필터 기준</button><button class="export-btn" onclick="exportTop5(false)">↓ 전체</button></div>
+        </div>
+        <div class="rank-grid">
+          <div>
+            <div class="rank-block-title">&#128293; 오픈 Top 5</div>
+            <div id="top5-open"><div class="no-data">데이터 없음</div></div>
+          </div>
+          <div>
+            <div class="rank-block-title">&#128070; 클릭 Top 5</div>
+            <div id="top5-click"><div class="no-data">데이터 없음</div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">
+          회신 브랜드 목록
+          <span class="section-subtitle" id="reply-count-label">–</span>
+          <div class="export-btns"><button class="export-btn" onclick="exportReplyData(true)">↓ 필터 기준</button><button class="export-btn" onclick="exportReplyData(false)">↓ 전체</button></div>
+        </div>
+        <div class="table-wrap" id="reply-list"><div class="no-data">회신한 브랜드가 없습니다.</div></div>
+        <div id="reply-pagination" class="pagination-wrap"></div>
+      </div>
+
+      <div class="chart-grid">
+        <div class="section">
+          <div class="section-title">외부 오픈율 추이<div class="export-btns"><button class="export-btn" onclick="exportTrend(true)">↓ 필터 기준</button><button class="export-btn" onclick="exportTrend(false)">↓ 전체</button></div></div>
+          <div class="chart-container"><canvas id="trendChart"></canvas></div>
+        </div>
+        <div class="section">
+          <div class="section-title">발송 시간대별 평균 오픈율<div class="export-btns"><button class="export-btn" onclick="exportTimeData(true)">↓ 필터 기준</button><button class="export-btn" onclick="exportTimeData(false)">↓ 전체</button></div></div>
+          <div class="chart-container"><canvas id="timeChart"></canvas></div>
+        </div>
+      </div>
+
+      <div class="chart-grid">
+        <div class="section">
+          <div class="section-title">요일별 평균 오픈율<div class="export-btns"><button class="export-btn" onclick="exportDayData(true)">↓ 필터 기준</button><button class="export-btn" onclick="exportDayData(false)">↓ 전체</button></div></div>
+          <div class="chart-container"><canvas id="dayChart"></canvas></div>
+        </div>
+        <div class="section">
+          <div class="section-title">카테고리별 평균 외부 오픈율<div class="export-btns"><button class="export-btn" onclick="exportCategoryData(true)">↓ 필터 기준</button><button class="export-btn" onclick="exportCategoryData(false)">↓ 전체</button></div></div>
+          <div class="chart-container"><canvas id="categoryChart"></canvas></div>
+          <div id="cat-note" class="note" style="display:none">카테고리 미입력 캠페인이 있습니다.</div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">카피 요소별 평균 외부 오픈율<div class="export-btns"><button class="export-btn" onclick="exportCopyData(true)">↓ 필터 기준</button><button class="export-btn" onclick="exportCopyData(false)">↓ 전체</button></div></div>
+        <div class="chart-container-tall"><canvas id="copyChart"></canvas></div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">카피요소 × 브랜드카테고리 오픈율<div class="export-btns"><button class="export-btn" onclick="exportCopyCatMatrix(true)">↓ 필터 기준</button><button class="export-btn" onclick="exportCopyCatMatrix(false)">↓ 전체</button></div></div>
+        <div id="copy-cat-matrix"><div class="no-data">데이터 로딩 중…</div></div>
+        <div class="note" style="margin-top:10px">셀 색상: <span style="color:#4ade80">■</span> 60%↑ &nbsp;<span style="color:#fbbf24">■</span> 35~60% &nbsp;<span style="color:#f87171">■</span> 35%↓ &nbsp;·&nbsp; n=2 흐리게 처리 &nbsp;·&nbsp; n=1 이하 – 처리</div>
+      </div>
+    </div><!-- /tab-campaign -->
+
+    <!-- ════ TAB: 브랜드 분석 ════ -->
+    <div id="tab-brand" style="display:none">
+      <div class="filter-bar">
+        <div class="filter-group">
+          <div class="filter-label">날짜 범위</div>
+          <div class="filter-row">
+            <input type="date" id="bDateStart" onchange="onBrandDateInput()">
+            <span class="date-sep">~</span>
+            <input type="date" id="bDateEnd" onchange="onBrandDateInput()">
+          </div>
+          <div class="preset-chips">
+            <div class="preset-chip" data-preset="7d" onclick="setBrandPreset(this)">최근 7일</div>
+            <div class="preset-chip" data-preset="30d" onclick="setBrandPreset(this)">최근 30일</div>
+            <div class="preset-chip" data-preset="mon" onclick="setBrandPreset(this)">이번 달</div>
+            <div class="preset-chip" data-preset="all" onclick="setBrandPreset(this)">전체</div>
+          </div>
+        </div>
+        <div class="filter-group">
+          <div class="filter-label">카테고리</div>
+          <div class="cat-chips" id="brand-cat-chips"></div>
+        </div>
+        <div class="filter-group">
+          <div class="filter-label">인스타 팔로워 규모</div>
+          <div class="size-chips" id="brand-insta-chips"></div>
+        </div>
+        <div class="filter-group">
+          <div class="filter-label">네이버 관심고객 규모</div>
+          <div class="size-chips" id="brand-naver-chips"></div>
+        </div>
+        <button class="filter-reset" onclick="resetBrandFilters()">필터 초기화</button>
+        <div class="filter-count" id="brand-filter-count"></div>
+      </div>
+
+      <!-- ── 브랜드 KPI 카드 (VER5 신규) ── -->
+      <div class="kpi-grid" id="brand-kpi-grid"></div>
+
+      <div class="chart-grid">
+        <div class="section">
+          <div class="section-title">카테고리별 오픈율<div class="export-btns"><button class="export-btn" onclick="exportBrandCatData(true)">↓ 필터 기준</button><button class="export-btn" onclick="exportBrandCatData(false)">↓ 전체</button></div></div>
+          <div style="position:relative;height:360px"><canvas id="brandCatChart"></canvas></div>
+        </div>
+        <div class="section">
+          <div class="section-title"><span id="brand-size-title">인스타 규모별 오픈율</span><div style="display:flex;align-items:center;gap:10px"><div class="axis-chips"><div class="axis-chip active" id="size-mode-insta" onclick="setBrandSizeMode('insta')">인스타</div><div class="axis-chip" id="size-mode-naver" onclick="setBrandSizeMode('naver')">네이버</div></div><div class="export-btns"><button class="export-btn" onclick="exportBrandInstaData(true)">↓ 필터 기준</button><button class="export-btn" onclick="exportBrandInstaData(false)">↓ 전체</button></div></div></div>
+          <div class="chart-container"><canvas id="brandInstaChart"></canvas></div>
+          <div id="brand-insta-nodata" class="note" style="display:none;margin-top:8px">데이터 없음 — 수신자마스터에 해당 컬럼 입력 필요</div>
+        </div>
+      </div>
+      <div class="chart-grid">
+        <div class="section">
+          <div class="section-title">요일별 오픈율 (브랜드 기준)<div class="export-btns"><button class="export-btn" onclick="exportBrandDayData(true)">↓ 필터 기준</button><button class="export-btn" onclick="exportBrandDayData(false)">↓ 전체</button></div></div>
+          <div class="chart-container"><canvas id="brandDayChart"></canvas></div>
+        </div>
+        <div class="section">
+          <div class="section-title">카피요소별 오픈율 (브랜드 기준)<div class="export-btns"><button class="export-btn" onclick="exportBrandCopyData(true)">↓ 필터 기준</button><button class="export-btn" onclick="exportBrandCopyData(false)">↓ 전체</button></div></div>
+          <div class="chart-container-tall"><canvas id="brandCopyChart"></canvas></div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">
+          브랜드 목록
+          <span class="section-subtitle" id="brand-count-label">–</span>
+          <div class="export-btns"><button class="export-btn" onclick="exportBrandTable(true)">↓ 필터 기준</button><button class="export-btn" onclick="exportBrandTable(false)">↓ 전체</button></div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead id="brand-table-head"></thead>
+            <tbody id="brand-table-body"></tbody>
+          </table>
+        </div>
+        <div id="brand-pagination" class="pagination-wrap"></div>
+      </div>
+
+      <div class="note" style="margin-top:-10px;margin-bottom:20px">
+        인스타 팔로워 / 네이버 관심고객 수치는 수신자마스터 시트에 <strong style="color:#888">인스타팔로워</strong>, <strong style="color:#888">네이버관심고객</strong> 컬럼을 추가하면 자동으로 집계됩니다.
+      </div>
+
+      <div class="section">
+        <div class="section-title">
+          Dynamic Matrix — 축별 오픈율
+          <div class="export-btns">
+            <button class="export-btn" onclick="exportDynMatrix(true)">↓ 필터 기준</button>
+            <button class="export-btn" onclick="exportDynMatrix(false)">↓ 전체</button>
+          </div>
+        </div>
+        <div class="matrix-axis-bar">
+          <div class="axis-group">
+            <div class="axis-label">행 (Row)</div>
+            <div class="axis-chips" id="dyn-row-chips"></div>
+          </div>
+          <div class="axis-sep">×</div>
+          <div class="axis-group">
+            <div class="axis-label">열 (Col)</div>
+            <div class="axis-chips" id="dyn-col-chips"></div>
+          </div>
+        </div>
+        <div id="dyn-matrix-container"><div class="no-data">데이터 로딩 중…</div></div>
+        <div class="note" style="margin-top:10px">셀 색상: <span style="color:#4ade80">■</span> 60%↑ &nbsp;<span style="color:#fbbf24">■</span> 35~60% &nbsp;<span style="color:#f87171">■</span> 35%↓ &nbsp;·&nbsp; n=2 흐리게 &nbsp;·&nbsp; n=1 이하 – 처리</div>
+      </div>
+
+    </div><!-- /tab-brand -->
+
+  </div><!-- /dashboard -->
+</div><!-- /inner -->
+
+<script>
+// ═══════════════════════════════════════════════════
+// 상수 및 전역 상태
+// ═══════════════════════════════════════════════════
+const API_URL = 'https://script.google.com/macros/s/AKfycbz3Gart_y8YJ8BkE8gm63sJgbik0BIAM6d8BkmPRXAl2kXtZjeTXfdRtKfe6-uqWz8/exec';
+let COPY_ELS = []; // runtime 자동 감지 (detectCopyEls)
+const INSTA_RANGES = ['~500','500~1K','1K~3K','3K~5K','5K~7K','7K~1만','1만+'];
+const NAVER_RANGES = ['~50','50~200','200~500','500~1K','1K~2K','2K~5K','5K+'];
+const DAY_ORDER = ['월','화','수','목','금','토','일'];
+
+let allCampaigns = [], allEmailList = [], allRecipients = [];
+let charts = {}, sortState = { col: null, dir: 'desc' };
+let campPage = 1, replyPage = 1;
+const PAGE_SIZE = 10;
+let filteredCampsCache = [];
+
+let allBrandRecords = [];
+let filteredBrandsCache = [];
+let filteredBrandRecordsCache = [];
+let brandPage = 1;
+let brandSortState = { col: 'openRate', dir: 'desc' };
+
+// ═══════════════════════════════════════════════════
+// API
+// ═══════════════════════════════════════════════════
+
+// ─── 카피요소 자동 감지 ───────────────────────────────
+// 발송이메일목록에서 값이 Y/N으로만 구성된 컬럼을 찾아 COPY_ELS 세팅
+const _COPY_NON_COLS = new Set([
+  '캠페인ID','발송일','발송일시','카테고리','이메일 제목','비고','구분',
+  '오픈율 (외부)','클릭수','수신자수','발송횟수','발송수','수신자','브랜드명',
+  '브랜드','오픈여부','클릭여부','회신여부','발송시간대','요일','시간대','시간','날짜',
+]);
+function detectCopyEls(rows) {
+  if (!rows.length) return;
+  const keys = Object.keys(rows[0]).filter(k => !_COPY_NON_COLS.has(k));
+  COPY_ELS = keys.filter(k => {
+    const vals = rows.map(r => String(r[k]||'').trim().toUpperCase()).filter(v => v);
+    if (!vals.length) return false;
+    const yn = vals.filter(v => v==='Y'||v==='N').length;
+    return yn / vals.length >= 0.8; // 80% 이상 Y/N이면 카피요소
+  });
+}
+
+async function fetchSheet(sheetName) {
+  const res = await fetch(`${API_URL}?sheet=${encodeURIComponent(sheetName)}`);
+  if (!res.ok) throw new Error(`fetch 실패 (${res.status})`);
+  const json = await res.json();
+  if (json && json.error) throw new Error(json.error);
+  return Array.isArray(json) ? json : [];
+}
+
+// ═══════════════════════════════════════════════════
+// 유틸
+// ═══════════════════════════════════════════════════
+function pct(v) {
+  if (v === null || v === undefined || v === '' || v === '-') return null;
+  const s = String(v).replace('%','').trim(), n = parseFloat(s);
+  if (isNaN(n)) return null;
+  if (!String(v).includes('%') && n >= 0 && n <= 1) return +(n*100).toFixed(1);
+  return +n.toFixed(1);
+}
+function rateClass(v) { return v === null ? '' : v >= 60 ? 'rate-high' : v >= 35 ? 'rate-mid' : 'rate-low'; }
+function avg(arr) { const f = arr.filter(v => v !== null); return f.length ? f.reduce((a,b)=>a+b,0)/f.length : null; }
+function destroyChart(id) { if (charts[id]) { charts[id].destroy(); delete charts[id]; } }
+const GRID = '#1e2128', AXIS = { color:'#666', font:{size:11} };
+
+function instaRange(v) {
+  if (!v) return '';
+  const s = String(v).trim();
+  if (INSTA_RANGES.includes(s)) return s;   // 이미 레이블이면 그대로
+  const n = parseInt(s); if (!n || isNaN(n)) return '';
+  if (n < 500) return '~500'; if (n < 1000) return '500~1K'; if (n < 3000) return '1K~3K';
+  if (n < 5000) return '3K~5K'; if (n < 7000) return '5K~7K'; if (n < 10000) return '7K~1만';
+  return '1만+';
+}
+function naverRange(v) {
+  if (!v) return '';
+  const s = String(v).trim();
+  if (NAVER_RANGES.includes(s)) return s;   // 이미 레이블이면 그대로
+  const n = parseInt(s); if (!n || isNaN(n)) return '';
+  if (n < 50) return '~50'; if (n < 200) return '50~200'; if (n < 500) return '200~500';
+  if (n < 1000) return '500~1K'; if (n < 2000) return '1K~2K'; if (n < 5000) return '2K~5K';
+  return '5K+';
+}
+function kpiValueClass(val) {
+  const s = String(val);
+  if (s.length > 10) return 'kpi-sm';
+  if (s.length > 6)  return 'kpi-md';
+  return '';
+}
+
+// ═══════════════════════════════════════════════════
+// 탭 전환
+// ═══════════════════════════════════════════════════
+function switchTab(tab) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById(`tab-btn-${tab}`).classList.add('active');
+  document.getElementById('tab-campaign').style.display = tab === 'campaign' ? 'block' : 'none';
+  document.getElementById('tab-brand').style.display   = tab === 'brand'    ? 'block' : 'none';
+}
+
+// ═══════════════════════════════════════════════════
+// 이메일 캠페인 탭 — 필터
+// ═══════════════════════════════════════════════════
+function getFilters() {
+  return {
+    dateStart:   document.getElementById('dateStart').value,
+    dateEnd:     document.getElementById('dateEnd').value,
+    activeCats:  [...document.querySelectorAll('#cat-chips .cat-chip.active')].map(el => el.dataset.val),
+    activeTimes: [...document.querySelectorAll('.time-chip.active')].map(el => el.dataset.val),
+  };
+}
+function filterCampaigns(campaigns) {
+  const { dateStart, dateEnd, activeCats, activeTimes } = getFilters();
+  return campaigns.filter(c => {
+    if (dateStart && c['발송일'] < dateStart) return false;
+    if (dateEnd   && c['발송일'] > dateEnd)   return false;
+    if (activeCats.length) {
+      if (allRecipients.length > 0) {
+        const campCats = allRecipients.filter(r => r['캠페인ID']===c['캠페인ID'] && r['구분']==='외부').map(r => r['브랜드카테고리']||'');
+        if (!activeCats.some(cat => campCats.includes(cat))) return false;
+      } else { if (!activeCats.includes(c['카테고리']||'')) return false; }
+    }
+    if (activeTimes.length && !activeTimes.includes(c['발송시간대']||'')) return false;
+    return true;
+  });
+}
+function filterEmailList(emailList, filtered) {
+  const ids = new Set(filtered.map(c => c['캠페인ID']));
+  return emailList.filter(r => ids.has(r['캠페인ID']));
+}
+function buildFilterUI(campaigns) {
+  const recipCats = [...new Set(allRecipients.filter(r=>r['구분']==='외부').map(r=>r['브랜드카테고리']||'').filter(v=>v&&v!=='내부'))];
+  const cats = recipCats.length > 0
+    ? recipCats.sort((a,b)=>a==='기타'?1:b==='기타'?-1:a.localeCompare(b,'ko'))
+    : [...new Set(campaigns.map(c=>c['카테고리']||'').filter(v=>v))].sort();
+  document.getElementById('cat-chips').innerHTML = cats.map(cat=>`<label class="cat-chip" data-val="${cat}" onclick="toggleChip(this)">${cat}</label>`).join('');
+  const times = [...new Set(campaigns.map(c=>c['발송시간대']||'').filter(v=>v))].sort();
+  document.getElementById('time-chips').innerHTML = times.map(t=>`<div class="time-chip" data-val="${t}" onclick="toggleTimeChip(this)">${t}</div>`).join('');
+}
+function toggleChip(el)     { el.classList.toggle('active'); applyFilters(); }
+function toggleTimeChip(el) { el.classList.toggle('active'); applyFilters(); }
+function setPreset(el) {
+  const today = new Date(), fmt = d => d.toISOString().slice(0,10), preset = el.dataset.preset;
+  document.querySelectorAll('#tab-campaign .preset-chip').forEach(c => c.classList.remove('active'));
+  el.classList.add('active');
+  if (preset === '7d') { const s=new Date(today); s.setDate(today.getDate()-6); document.getElementById('dateStart').value=fmt(s); document.getElementById('dateEnd').value=fmt(today); }
+  else if (preset === '30d') { const s=new Date(today); s.setDate(today.getDate()-29); document.getElementById('dateStart').value=fmt(s); document.getElementById('dateEnd').value=fmt(today); }
+  else if (preset === 'mon') { document.getElementById('dateStart').value=fmt(new Date(today.getFullYear(),today.getMonth(),1)); document.getElementById('dateEnd').value=fmt(today); }
+  else { document.getElementById('dateStart').value=''; document.getElementById('dateEnd').value=''; }
+  applyFilters();
+}
+function onDateInput() { document.querySelectorAll('#tab-campaign .preset-chip').forEach(c=>c.classList.remove('active')); applyFilters(); }
+function resetFilters() {
+  document.getElementById('dateStart').value=''; document.getElementById('dateEnd').value='';
+  document.querySelectorAll('#tab-campaign .cat-chip.active,#tab-campaign .time-chip.active,#tab-campaign .preset-chip.active').forEach(el=>el.classList.remove('active'));
+  sortState={col:null,dir:'desc'}; applyFilters();
+}
+function applyFilters() {
+  campPage=1;
+  const filtered=filterCampaigns(allCampaigns);
+  const filteredEmail=filterEmailList(allEmailList, filtered);
+  const countEl=document.getElementById('filter-count');
+  countEl.textContent=filtered.length<allCampaigns.length?`${filtered.length} / ${allCampaigns.length}개 캠페인`:'';
+  renderKPIs(filtered); renderTable(filtered); renderTrendChart(filtered); renderTimeChart(filtered);
+  renderDayChart(filtered); renderCopyChart(filteredEmail); renderCategoryChart(filtered); renderCopyCategoryMatrix(filtered);
+}
+
+// ═══════════════════════════════════════════════════
+// KPI — 이메일 캠페인
+// ═══════════════════════════════════════════════════
+function renderKPIs(campaigns) {
+  const extRates=campaigns.map(c=>pct(c['오픈율 (외부)'])).filter(v=>v!==null);
+  const totalSent=campaigns.reduce((a,c)=>a+(parseInt(c['총 발송수'])||0),0);
+  const totalClicks=campaigns.reduce((a,c)=>a+(parseInt(c['클릭수'])||0),0);
+  const avgExt=avg(extRates);
+  const best=campaigns.reduce((a,c)=>{ const v=pct(c['오픈율 (외부)']); return (v!==null&&(a===null||v>pct(a['오픈율 (외부)'])))?c:a; },null);
+  const sevenDaysAgo=new Date(Date.now()-7*24*60*60*1000).toISOString().slice(0,10);
+  const recentCamps=campaigns.filter(c=>c['발송일']>=sevenDaysAgo);
+  const recentAvg=avg(recentCamps.map(c=>pct(c['오픈율 (외부)'])).filter(v=>v!==null));
+  const filteredIds=new Set(campaigns.map(c=>c['캠페인ID']));
+  const extRecip=allRecipients.filter(r=>filteredIds.has(r['캠페인ID'])&&r['구분']==='외부');
+  const replyCount=extRecip.filter(r=>String(r['회신여부']).trim()==='Y').length;
+  const replyRate=extRecip.length>0?(replyCount/extRecip.length*100).toFixed(1):null;
+  document.getElementById('kpi-grid').innerHTML=[
+    {label:'캠페인',value:campaigns.length,sub:'건'},
+    {label:'총 발송',value:totalSent,sub:'명'},
+    {label:'평균 오픈율',value:avgExt!==null?avgExt.toFixed(1)+'%':'-',sub:'외부 기준'},
+    {label:'최근 7일 오픈율',value:recentAvg!==null?recentAvg.toFixed(1)+'%':'-',sub:recentCamps.length?`${recentCamps.length}개 캠페인`:'캠페인 없음'},
+    {label:'최고 오픈율',value:best?pct(best['오픈율 (외부)']).toFixed(1)+'%':'-',sub:best?best['캠페인ID']:''},
+    {label:'회신율',value:replyRate!==null?replyRate+'%':'-',sub:`${replyCount}건 / ${extRecip.length}명`},
+    {label:'총 클릭수',value:totalClicks,sub:'회'},
+  ].map(k=>`<div class="kpi-card"><div class="kpi-label">${k.label}</div><div class="kpi-value ${kpiValueClass(k.value)}">${k.value}</div><div class="kpi-sub">${k.sub}</div></div>`).join('');
+}
+
+// ═══════════════════════════════════════════════════
+// KPI — 브랜드 분석 (VER5 신규)
+// ═══════════════════════════════════════════════════
+function renderBrandKPIs(brands, records) {
+  const el=document.getElementById('brand-kpi-grid'); if(!el) return;
+  const totalSent=brands.reduce((a,b)=>a+b.sent,0);
+  const openRates=brands.filter(b=>b.openRate!==null).map(b=>b.openRate);
+  const clickRates=brands.filter(b=>b.clickRate!==null).map(b=>b.clickRate);
+  const avgOpen=openRates.length?(openRates.reduce((a,b)=>a+b,0)/openRates.length).toFixed(1):null;
+  const avgClick=clickRates.length?(clickRates.reduce((a,b)=>a+b,0)/clickRates.length).toFixed(1):null;
+  const totalReplied=records.filter(r=>r.replied).length;
+  const replyRate=records.length>0?(totalReplied/records.length*100).toFixed(1):null;
+
+  // 최적 요일
+  const dayMap={};
+  records.forEach(r=>{ if(!r.dayOfWeek)return; if(!dayMap[r.dayOfWeek])dayMap[r.dayOfWeek]={opened:0,total:0}; dayMap[r.dayOfWeek].total++; if(r.opened)dayMap[r.dayOfWeek].opened++; });
+  const bestDayEntry=Object.entries(dayMap).filter(([,d])=>d.total>=2).sort((a,b)=>(b[1].opened/b[1].total)-(a[1].opened/a[1].total))[0];
+  const bestDay=bestDayEntry?`${bestDayEntry[0]} (${(bestDayEntry[1].opened/bestDayEntry[1].total*100).toFixed(0)}%)`:'-';
+
+  // 발송 시간대
+  const timeMap={};
+  records.forEach(r=>{ if(!r.timeSlot)return; if(!timeMap[r.timeSlot])timeMap[r.timeSlot]={opened:0,total:0}; timeMap[r.timeSlot].total++; if(r.opened)timeMap[r.timeSlot].opened++; });
+  const bestTimeEntry=Object.entries(timeMap).filter(([,d])=>d.total>=2).sort((a,b)=>(b[1].opened/b[1].total)-(a[1].opened/a[1].total))[0];
+  const bestTime=bestTimeEntry?`${bestTimeEntry[0]} (${(bestTimeEntry[1].opened/bestTimeEntry[1].total*100).toFixed(0)}%)`:'-';
+
+  // 최적 카피요소
+  const copyMap={};
+  COPY_ELS.forEach(ce=>{copyMap[ce]={opened:0,total:0};});
+  records.forEach(r=>{ COPY_ELS.forEach(ce=>{ if((r.copy[ce]||'').toUpperCase()!=='Y')return; copyMap[ce].total++; if(r.opened)copyMap[ce].opened++; }); });
+  const bestCopyEntry=Object.entries(copyMap).filter(([,d])=>d.total>=2).sort((a,b)=>(b[1].opened/b[1].total)-(a[1].opened/a[1].total))[0];
+  const bestCopy=bestCopyEntry?bestCopyEntry[0]:'-';
+
+  const unopenedCount=brands.filter(b=>b.opened===0&&b.sent>0).length;
+
+  const kpis=[
+    {label:'브랜드 수',     value:brands.length,                             sub:'개'},
+    {label:'총 발송 건수',  value:totalSent,                                  sub:'건'},
+    {label:'평균 오픈율',   value:avgOpen!==null?avgOpen+'%':'-',             sub:'브랜드 기준'},
+    {label:'평균 클릭율',   value:avgClick!==null?avgClick+'%':'-',           sub:'브랜드 기준'},
+    {label:'회신율',        value:replyRate!==null?replyRate+'%':'-',         sub:`${totalReplied}건`},
+    {label:'최적 요일',     value:bestDay,                                    sub:'오픈율 기준'},
+    {label:'발송 시간대',   value:bestTime,                                   sub:'오픈율 기준'},
+    {label:'최적 카피요소', value:bestCopy,                                   sub:'오픈율 기준'},
+    {label:'미오픈 브랜드', value:unopenedCount,                              sub:'한 번도 안 열림'},
+  ];
+  el.innerHTML=kpis.map(k=>`<div class="kpi-card"><div class="kpi-label">${k.label}</div><div class="kpi-value ${kpiValueClass(k.value)}">${k.value}</div><div class="kpi-sub">${k.sub}</div></div>`).join('');
+}
+
+// ═══════════════════════════════════════════════════
+// 페이지네이션
+// ═══════════════════════════════════════════════════
+function renderPagination(containerId, total, currentPage, setterName) {
+  const el=document.getElementById(containerId);
+  const totalPages=Math.ceil(total/PAGE_SIZE);
+  if(totalPages<=1){el.innerHTML='';return;}
+  const pgBtn=(p,label,isActive,isDisabled)=>`<button class="pg-btn${isActive?' pg-active':''}" ${isDisabled?'disabled':''} onclick="${setterName}(${p})">${label}</button>`;
+  let startP=Math.max(1,currentPage-2), endP=Math.min(totalPages,startP+4);
+  startP=Math.max(1,endP-4);
+  let html=pgBtn(currentPage-1,'‹',false,currentPage===1);
+  if(startP>1) html+=pgBtn(1,'1',false,false)+(startP>2?'<span class="pg-info">…</span>':'');
+  for(let p=startP;p<=endP;p++) html+=pgBtn(p,p,p===currentPage,false);
+  if(endP<totalPages) html+=(endP<totalPages-1?'<span class="pg-info">…</span>':'')+pgBtn(totalPages,totalPages,false,false);
+  html+=pgBtn(currentPage+1,'›',false,currentPage===totalPages);
+  const from=(currentPage-1)*PAGE_SIZE+1, to=Math.min(currentPage*PAGE_SIZE,total);
+  html+=`<span class="pg-info">${from}–${to} / ${total}건</span>`;
+  el.innerHTML=html;
+}
+function setCampPage(p)  { campPage=p;  renderTable(filteredCampsCache); }
+function setReplyPage(p) { replyPage=p; renderReplyList(); }
+function setBrandPage(p) { brandPage=p; renderBrandTable(filteredBrandsCache); }
+
+// ═══════════════════════════════════════════════════
+// 캠페인 테이블
+// ═══════════════════════════════════════════════════
+function renderTable(campaigns) {
+  filteredCampsCache=campaigns;
+  if(!campaigns.length){
+    document.getElementById('campaign-table').innerHTML=`<tr><td colspan="8" class="no-data">해당 조건의 캠페인이 없습니다.</td></tr>`;
+    document.getElementById('camp-pagination').innerHTML=''; return;
+  }
+  let sorted=[...campaigns];
+  if(sortState.col) sorted.sort((a,b)=>{ const va=pct(a[sortState.col])??-1, vb=pct(b[sortState.col])??-1; return sortState.dir==='desc'?vb-va:va-vb; });
+  const total=sorted.length, totalPages=Math.max(1,Math.ceil(total/PAGE_SIZE));
+  campPage=Math.min(campPage,totalPages);
+  const pageItems=sorted.slice((campPage-1)*PAGE_SIZE,campPage*PAGE_SIZE);
+  const cols=[
+    {key:null,label:'ID'},{key:'발송일',label:'발송일'},{key:null,label:'카테고리'},
+    {key:null,label:'이메일 제목'},{key:'총 발송수',label:'발송수'},
+    {key:'오픈율 (외부)',label:'오픈율',sort:true},{key:'클릭수',label:'클릭수',sort:true},{key:null,label:'비고'},
+  ];
+  const head='<tr>'+cols.map(col=>{ if(!col.sort)return `<th>${col.label}</th>`; const cls=sortState.col===col.key?`sort-${sortState.dir}`:''; return `<th class="sortable ${cls}" onclick="sortBy('${col.key}')">${col.label}</th>`; }).join('')+'</tr>';
+  const rows=pageItems.map(c=>{
+    const cat=c['카테고리']||'', extR=pct(c['오픈율 (외부)']), subj=c['이메일 제목']||'', note=c['비고']||'';
+    return `<tr>
+      <td><span class="cid">${c['캠페인ID']}</span></td>
+      <td style="white-space:nowrap">${c['발송일']}</td>
+      <td><span class="badge ${cat?'badge-cat':'badge-empty'}">${cat||'미입력'}</span></td>
+      <td style="font-size:12px;color:#888;max-width:200px" title="${subj}">${subj.length>36?subj.slice(0,36)+'…':subj}</td>
+      <td style="text-align:right">${c['총 발송수']}</td>
+      <td class="${rateClass(extR)}">${extR!==null?extR.toFixed(1)+'%':'-'}</td>
+      <td style="text-align:right">${c['클릭수']||'0'}</td>
+      <td style="font-size:11px;color:#555" title="${note}">${note.length>26?note.slice(0,26)+'…':note}</td>
+    </tr>`;
+  }).join('');
+  document.getElementById('campaign-table').innerHTML=head+rows;
+  renderPagination('camp-pagination',total,campPage,'setCampPage');
+}
+function sortBy(col) {
+  sortState.col===col?(sortState.dir=sortState.dir==='desc'?'asc':'desc'):(sortState.col=col,sortState.dir='desc');
+  campPage=1; renderTable(filteredCampsCache);
+}
+
+// ═══════════════════════════════════════════════════
+// Top5
+// ═══════════════════════════════════════════════════
+function renderTop5() {
+  if(!allRecipients.length||!allCampaigns.length) return;
+  const latest=[...allCampaigns].sort((a,b)=>b['발송일'].localeCompare(a['발송일']))[0];
+  if(!latest) return;
+  const latestRecip=allRecipients.filter(r=>r['캠페인ID']===latest['캠페인ID']&&r['구분']==='외부');
+  document.getElementById('top5-label').textContent=`기준: ${latest['캠페인ID']} (${latest['발송일']})`;
+  const rankCls=i=>i===0?'top1':i===1?'top2':i===2?'top3':'';
+  const makeRows=(items,key)=>items.length
+    ?items.map((r,i)=>`<div class="rank-row"><span class="rank-num ${rankCls(i)}">${i+1}</span><span class="rank-name" title="${r['닉네임/회사명']||''}">${r['닉네임/회사명']||r['이메일']||'-'}</span><span class="badge badge-cat" style="font-size:10px;flex-shrink:0">${r['브랜드카테고리']||''}</span><span class="rank-value">${parseInt(r[key])||0}회</span></div>`).join('')
+    :'<div class="no-data">데이터 없음</div>';
+  const byOpen=[...latestRecip].filter(r=>parseInt(r['오픈수'])>0).sort((a,b)=>parseInt(b['오픈수'])-parseInt(a['오픈수'])).slice(0,5);
+  const byClick=[...latestRecip].filter(r=>parseInt(r['클릭수'])>0).sort((a,b)=>parseInt(b['클릭수'])-parseInt(a['클릭수'])).slice(0,5);
+  document.getElementById('top5-open').innerHTML=makeRows(byOpen,'오픈수');
+  document.getElementById('top5-click').innerHTML=makeRows(byClick,'클릭수');
+}
+
+// ═══════════════════════════════════════════════════
+// 회신 브랜드
+// ═══════════════════════════════════════════════════
+function renderReplyList() {
+  const replied=allRecipients.filter(r=>r['구분']==='외부'&&String(r['회신여부']).trim()==='Y').sort((a,b)=>(b['최초회신일시']||'').localeCompare(a['최초회신일시']||''));
+  document.getElementById('reply-count-label').textContent=`총 ${replied.length}건`;
+  const container=document.getElementById('reply-list');
+  if(!replied.length){container.innerHTML='<div class="no-data">아직 회신한 브랜드가 없습니다.</div>'; document.getElementById('reply-pagination').innerHTML=''; return;}
+  const total=replied.length, totalPages=Math.max(1,Math.ceil(total/PAGE_SIZE));
+  replyPage=Math.min(replyPage,totalPages);
+  const pageItems=replied.slice((replyPage-1)*PAGE_SIZE,replyPage*PAGE_SIZE);
+  const rows=pageItems.map(r=>{const summary=r['회신내용요약']||''; return `<tr><td><span class="cid">${r['캠페인ID']||''}</span></td><td style="white-space:nowrap;font-size:12px">${r['발송일']||''}</td><td style="font-weight:600;color:#e8e8e8">${r['닉네임/회사명']||''}</td><td><span class="badge badge-cat">${r['브랜드카테고리']||''}</span></td><td style="white-space:nowrap;color:#4ade80;font-size:12px">${r['최초회신일시']||''}</td><td style="font-size:11px;color:#888" title="${summary}">${summary.length>45?summary.slice(0,45)+'…':summary}</td></tr>`;}).join('');
+  container.innerHTML=`<table><tr><th>캠페인</th><th>발송일</th><th>회사명</th><th>카테고리</th><th>최초 회신일시</th><th>내용 요약</th></tr>${rows}</table>`;
+  renderPagination('reply-pagination',total,replyPage,'setReplyPage');
+}
+
+// ═══════════════════════════════════════════════════
+// 엑셀 내보내기
+// ═══════════════════════════════════════════════════
+function getAllKeys(rows){const ks=new Set(); rows.forEach(r=>Object.keys(r).forEach(k=>ks.add(k))); return [...ks];}
+function estimateCols(keys,rows){return keys.map(k=>{const hLen=[...k].reduce((a,c)=>a+(c.charCodeAt(0)>127?2:1),0); const dLen=rows.reduce((m,r)=>{const v=String(r[k]??''); const l=[...v].reduce((a,c)=>a+(c.charCodeAt(0)>127?2:1),0); return Math.max(m,l);},0); return{wch:Math.min(Math.max(hLen,dLen)+2,50)};});}
+function exportToExcel(isFiltered) {
+  if(typeof XLSX==='undefined'){alert('Excel 라이브러리 로딩 중입니다. 잠시 후 다시 시도해주세요.');return;}
+  const wb=XLSX.utils.book_new();
+  const campaigns=isFiltered?filteredCampsCache:allCampaigns;
+  const filteredIds=new Set(campaigns.map(c=>c['캠페인ID']));
+  const appendSheet=(data,name)=>{ if(!data.length)return; const keys=getAllKeys(data); const ws=XLSX.utils.aoa_to_sheet([keys,...data.map(r=>keys.map(k=>r[k]??''))]); ws['!cols']=estimateCols(keys,data); XLSX.utils.book_append_sheet(wb,ws,name); };
+  appendSheet(campaigns,'캠페인목록');
+  appendSheet(isFiltered?allEmailList.filter(r=>filteredIds.has(r['캠페인ID'])):allEmailList,'발송이메일목록');
+  appendSheet(isFiltered?allRecipients.filter(r=>filteredIds.has(r['캠페인ID'])):allRecipients,'수신자목록');
+  appendSheet(allRecipients.filter(r=>r['구분']==='외부'&&String(r['회신여부']).trim()==='Y').sort((a,b)=>(b['최초회신일시']||'').localeCompare(a['최초회신일시']||'')),'회신브랜드');
+  XLSX.writeFile(wb,`데얼스_캠페인_${isFiltered?'필터':'전체'}_${new Date().toISOString().slice(0,10)}.xlsx`);
+}
+
+// ═══════════════════════════════════════════════════
+// 차트 — 추이
+// ═══════════════════════════════════════════════════
+function renderTrendChart(campaigns) {
+  destroyChart('trendChart');
+  const sorted=[...campaigns].sort((a,b)=>a['발송일'].localeCompare(b['발송일']));
+  if(!sorted.length) return;
+  charts['trendChart']=new Chart(document.getElementById('trendChart'),{
+    type:'line',
+    data:{labels:sorted.map(c=>`${c['캠페인ID']}\n(${c['발송일'].slice(5)})`),datasets:[{label:'외부 오픈율',data:sorted.map(c=>pct(c['오픈율 (외부)'])),borderColor:'#ff6b00',backgroundColor:'rgba(255,107,0,0.08)',borderWidth:2.5,pointRadius:5,pointBackgroundColor:'#ff6b00',tension:0.3,fill:true}]},
+    options:{responsive:true,maintainAspectRatio:false,scales:{y:{beginAtZero:true,max:110,grid:{color:GRID},ticks:{...AXIS,callback:v=>v+'%'}},x:{grid:{color:GRID},ticks:{...AXIS}}},plugins:{legend:{labels:{color:'#888',font:{size:12}}},tooltip:{callbacks:{label:ctx=>` 외부 오픈율: ${ctx.parsed.y?.toFixed(1)}%`}}}}
+  });
+}
+
+// ═══════════════════════════════════════════════════
+// 차트 — 시간대
+// ═══════════════════════════════════════════════════
+function renderTimeChart(campaigns) {
+  destroyChart('timeChart');
+  const map={};
+  campaigns.forEach(c=>{ const t=c['발송시간대']||'기타', r=pct(c['오픈율 (외부)']); if(r===null)return; if(!map[t])map[t]={sum:0,cnt:0}; map[t].sum+=r; map[t].cnt++; });
+  const labels=Object.keys(map).sort(); if(!labels.length)return;
+  const values=labels.map(t=>+(map[t].sum/map[t].cnt).toFixed(1)), counts=labels.map(t=>map[t].cnt);
+  charts['timeChart']=new Chart(document.getElementById('timeChart'),{
+    type:'bar',data:{labels,datasets:[{label:'평균 외부 오픈율',data:values,backgroundColor:labels.map((_,i)=>i%2===0?'rgba(255,107,0,0.75)':'rgba(255,107,0,0.45)'),borderRadius:6}]},
+    options:{responsive:true,maintainAspectRatio:false,scales:{y:{beginAtZero:true,max:110,grid:{color:GRID},ticks:{...AXIS,callback:v=>v+'%'}},x:{grid:{display:false},ticks:{color:'#aaa',font:{size:14}}}},plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>` 평균 오픈율: ${ctx.parsed.y}%`,afterLabel:ctx=>` 캠페인 ${counts[ctx.dataIndex]}건`}}}}
+  });
+}
+
+// ═══════════════════════════════════════════════════
+// 차트 — 요일
+// ═══════════════════════════════════════════════════
+function renderDayChart(campaigns) {
+  destroyChart('dayChart');
+  const DAY_NAMES=['일','월','화','수','목','금','토'];
+  const map={};
+  campaigns.forEach(c=>{ if(!c['발송일'])return; const day=DAY_NAMES[new Date(c['발송일']).getDay()]; const r=pct(c['오픈율 (외부)']); if(r===null)return; if(!map[day])map[day]={sum:0,cnt:0}; map[day].sum+=r; map[day].cnt++; });
+  const labels=DAY_ORDER.filter(d=>map[d]); if(!labels.length)return;
+  const values=labels.map(d=>+(map[d].sum/map[d].cnt).toFixed(1));
+  const counts=labels.map(d=>map[d].cnt);
+  const maxVal=Math.max(...values);
+  charts['dayChart']=new Chart(document.getElementById('dayChart'),{
+    type:'bar',data:{labels,datasets:[{label:'평균 외부 오픈율',data:values,backgroundColor:values.map(v=>v===maxVal?'rgba(255,107,0,0.9)':'rgba(255,107,0,0.45)'),borderRadius:6}]},
+    options:{responsive:true,maintainAspectRatio:false,scales:{y:{beginAtZero:true,max:110,grid:{color:GRID},ticks:{...AXIS,callback:v=>v+'%'}},x:{grid:{display:false},ticks:{color:'#aaa',font:{size:14}}}},plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>` 평균 오픈율: ${ctx.parsed.y}%`,afterLabel:ctx=>` 캠페인 ${counts[ctx.dataIndex]}건`}}}}
+  });
+}
+
+// ═══════════════════════════════════════════════════
+// 차트 — 카피요소
+// ═══════════════════════════════════════════════════
+function renderCopyChart(emailList) {
+  destroyChart('copyChart');
+  const yRates=[], nRates=[];
+  COPY_ELS.forEach(el=>{ const y=emailList.filter(r=>r[el]==='Y').map(r=>pct(r['오픈율 (외부)'])).filter(v=>v!==null); const n=emailList.filter(r=>r[el]==='N').map(r=>pct(r['오픈율 (외부)'])).filter(v=>v!==null); yRates.push(avg(y)!==null?+avg(y).toFixed(1):null); nRates.push(avg(n)!==null?+avg(n).toFixed(1):null); });
+  charts['copyChart']=new Chart(document.getElementById('copyChart'),{
+    type:'bar',data:{labels:COPY_ELS,datasets:[{label:'Y (포함)',data:yRates,backgroundColor:'rgba(255,107,0,0.75)',borderRadius:4},{label:'N (미포함)',data:nRates,backgroundColor:'rgba(100,116,139,0.45)',borderRadius:4}]},
+    options:{responsive:true,maintainAspectRatio:false,indexAxis:'y',scales:{x:{beginAtZero:true,max:110,grid:{color:GRID},ticks:{...AXIS,callback:v=>v+'%'}},y:{grid:{display:false},ticks:{color:'#bbb',font:{size:12}}}},plugins:{legend:{labels:{color:'#888',font:{size:12}}},tooltip:{callbacks:{label:ctx=>` ${ctx.dataset.label}: ${ctx.parsed.x!==null?ctx.parsed.x+'%':'데이터 없음'}`}}}}
+  });
+}
+
+// ═══════════════════════════════════════════════════
+// 차트 — 카테고리
+// ═══════════════════════════════════════════════════
+function renderCategoryChart(filteredCampaigns) {
+  destroyChart('categoryChart');
+  const filteredIds=new Set(filteredCampaigns.map(c=>c['캠페인ID']));
+  const COLORS=['#ff6b00','#ff8c33','#ffad66','#e65c00','#cc5200','#b34700','#ffd700'];
+  if(allRecipients.length>0){
+    const map={};
+    allRecipients.filter(r=>filteredIds.has(r['캠페인ID'])&&r['구분']==='외부').forEach(r=>{ const cat=r['브랜드카테고리']||'기타'; if(cat==='내부')return; if(!map[cat])map[cat]={opened:0,total:0}; map[cat].total++; if(parseInt(r['오픈수'])>0)map[cat].opened++; });
+    const hasCat=Object.keys(map).length>0;
+    document.getElementById('cat-note').style.display=hasCat?'none':'block';
+    const labels=hasCat?Object.keys(map).sort((a,b)=>a==='기타'?1:b==='기타'?-1:(map[b].opened/map[b].total)-(map[a].opened/map[a].total)):['카테고리 없음'];
+    const values=hasCat?labels.map(l=>+(map[l].opened/map[l].total*100).toFixed(1)):[0];
+    const counts=hasCat?labels.map(l=>map[l]):[{opened:0,total:0}];
+    charts['categoryChart']=new Chart(document.getElementById('categoryChart'),{type:'bar',data:{labels,datasets:[{label:'브랜드 카테고리별 오픈율',data:values,backgroundColor:hasCat?labels.map((_,i)=>COLORS[i%COLORS.length]+'cc'):['#2a2d35'],borderRadius:6}]},options:{responsive:true,maintainAspectRatio:false,scales:{y:{beginAtZero:true,max:110,grid:{color:GRID},ticks:{...AXIS,callback:v=>v+'%'}},x:{grid:{display:false},ticks:{color:'#bbb',font:{size:13}}}},plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>` 오픈율: ${ctx.parsed.y}%`,afterLabel:ctx=>{const d=counts[ctx.dataIndex];return ` 수신자 ${d.total}명 중 ${d.opened}명 오픈`;}}}}}}); return;
+  }
+  const map={};
+  allEmailList.filter(r=>filteredIds.has(r['캠페인ID'])).forEach(r=>{ const cat=r['카테고리']||''; if(!cat)return; const rate=pct(r['오픈율 (외부)']); if(rate===null)return; if(!map[cat])map[cat]={sum:0,cnt:0}; map[cat].sum+=rate; map[cat].cnt++; });
+  const hasCat=Object.keys(map).length>0;
+  document.getElementById('cat-note').style.display=hasCat?'none':'block';
+  const labels=hasCat?Object.keys(map):['카테고리 없음'];
+  const values=hasCat?labels.map(l=>+(map[l].sum/map[l].cnt).toFixed(1)):[0];
+  charts['categoryChart']=new Chart(document.getElementById('categoryChart'),{type:'bar',data:{labels,datasets:[{label:'평균 외부 오픈율',data:values,backgroundColor:hasCat?labels.map((_,i)=>COLORS[i%COLORS.length]+'cc'):['#2a2d35'],borderRadius:6}]},options:{responsive:true,maintainAspectRatio:false,scales:{y:{beginAtZero:true,max:110,grid:{color:GRID},ticks:{...AXIS,callback:v=>v+'%'}},x:{grid:{display:false},ticks:{color:'#bbb',font:{size:13}}}},plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>` 평균 오픈율: ${ctx.parsed.y}%`}}}}});
+}
+
+// ═══════════════════════════════════════════════════
+// 카피요소 × 브랜드카테고리 매트릭스
+// n<2 → –, n=2 → dim, n≥3 → 정상
+// ═══════════════════════════════════════════════════
+function renderCopyCategoryMatrix(filteredCampaigns) {
+  const container=document.getElementById('copy-cat-matrix'); if(!container)return;
+  const filteredIds=new Set(filteredCampaigns.map(c=>c['캠페인ID']));
+  const copyMap={}; allEmailList.forEach(r=>{ if(filteredIds.has(r['캠페인ID']))copyMap[r['캠페인ID']]=r; });
+  const matrix={}; COPY_ELS.forEach(el=>{matrix[el]={};});
+  const catSet=new Set();
+  allRecipients.filter(r=>filteredIds.has(r['캠페인ID'])&&r['구분']==='외부').forEach(r=>{
+    const cat=r['브랜드카테고리']||'기타'; if(cat==='내부')return; catSet.add(cat);
+    const camp=copyMap[r['캠페인ID']]; if(!camp)return;
+    const opened=parseInt(r['오픈수'])>0;
+    COPY_ELS.forEach(el=>{ if((camp[el]||'').toUpperCase()!=='Y')return; if(!matrix[el][cat])matrix[el][cat]={opened:0,total:0}; matrix[el][cat].total++; if(opened)matrix[el][cat].opened++; });
+  });
+  if(catSet.size===0){container.innerHTML='<div class="no-data">수신자마스터에 브랜드카테고리 데이터가 없습니다.</div>';return;}
+  const cats=[...catSet].sort((a,b)=>a==='기타'?1:b==='기타'?-1:a.localeCompare(b,'ko'));
+  let html='<div class="matrix-wrap"><table class="matrix-table"><thead><tr><th class="matrix-th-label">카피 요소</th>';
+  cats.forEach(cat=>{html+=`<th>${cat}</th>`;});
+  html+='</tr></thead><tbody>';
+  COPY_ELS.forEach(el=>{
+    html+=`<tr><td class="matrix-row-label">${el}</td>`;
+    cats.forEach(cat=>{
+      const d=matrix[el][cat];
+      if(!d||d.total<2){html+='<td class="matrix-cell empty">–</td>';return;}  // n<2 → –
+      const rate=d.opened/d.total, p=(rate*100).toFixed(0);
+      const lvl=rate>=0.6?'high':rate>=0.35?'mid':'low', dim=d.total<3?' dim':'';
+      html+=`<td class="matrix-cell ${lvl}${dim}" title="${el} x ${cat}: ${d.opened}/${d.total}명 오픈"><span class="matrix-pct ${lvl}">${p}%</span><span class="matrix-n">n=${d.total}</span></td>`;
+    });
+    html+='</tr>';
+  });
+  html+='</tbody></table></div>';
+  container.innerHTML=html;
+}
+
+// ═══════════════════════════════════════════════════
+// 브랜드 분석 탭 — 데이터 빌드
+// ═══════════════════════════════════════════════════
+function _findColVal(row, keywords) {
+  // 정확히 일치하는 키 먼저
+  for (const k of keywords) { if (k in row && row[k]) return row[k]; }
+  // 키워드가 포함된 컬럼 퍼지 탐색
+  const kk = Object.keys(row);
+  for (const keyword of keywords) {
+    const trimKw = keyword.replace(/\s/g,'');
+    const found = kk.find(k => k.replace(/\s/g,'') === trimKw);
+    if (found && row[found]) return row[found];
+  }
+  return '';
+}
+function buildBrandRecords() {
+  const campMap={}, copyMap={};
+  allCampaigns.forEach(c=>campMap[c['캠페인ID']]=c);
+  allEmailList.forEach(e=>copyMap[e['캠페인ID']]=e);
+  const DAY_NAMES=['일','월','화','수','목','금','토'];
+  allBrandRecords=allRecipients
+    .filter(r=>r['구분']==='외부'&&(r['닉네임/회사명']||'').trim())
+    .map(r=>{
+      const camp=campMap[r['캠페인ID']]||{}, copy=copyMap[r['캠페인ID']]||{};
+      const sendDate=camp['발송일']||'';
+      const date=sendDate?new Date(sendDate):null;
+      return {
+        name:     (r['닉네임/회사명']||'').trim(),
+        category: r['브랜드카테고리']||'',
+        instaVal: _findColVal(r,['인스타팔로워','인스타 팔로워','인스타팔로어','인스타 팔로어'])||_findColVal(copy,['인스타팔로워','인스타 팔로워','인스타팔로어','인스타 팔로어'])||'',
+        naverVal: _findColVal(r,['네이버관심고객','네이버 관심고객','네이버관심','네이버 관심'])||_findColVal(copy,['네이버관심고객','네이버 관심고객','네이버관심','네이버 관심'])||'',
+        sendDate,
+        timeSlot: camp['발송시간대']||'',
+        dayOfWeek:date?DAY_NAMES[date.getDay()]:'',
+        opened:   parseInt(r['오픈수'])>0,
+        clicked:  parseInt(r['클릭수'])>0,
+        replied:  String(r['회신여부']).trim()==='Y',  // VER5 추가
+        copy,
+      };
+    });
+}
+
+function aggregateBrands(records) {
+  const brandMap={};
+  records.forEach(r=>{
+    if(!brandMap[r.name]) brandMap[r.name]={name:r.name,category:r.category,instaVal:'',naverVal:'',sent:0,opened:0,clicked:0,replied:0,dayCount:{},timeCount:{},copyCount:{}};
+    const b=brandMap[r.name];
+    b.sent++;
+    if(!b.instaVal&&r.instaVal) b.instaVal=r.instaVal;
+    if(!b.naverVal&&r.naverVal) b.naverVal=r.naverVal;
+    if(!b.category&&r.category) b.category=r.category;
+    if(r.opened){
+      b.opened++;
+      if(r.dayOfWeek) b.dayCount[r.dayOfWeek]=(b.dayCount[r.dayOfWeek]||0)+1;
+      if(r.timeSlot)  b.timeCount[r.timeSlot]=(b.timeCount[r.timeSlot]||0)+1;
+      COPY_ELS.forEach(el=>{ if((r.copy[el]||'').toUpperCase()==='Y') b.copyCount[el]=(b.copyCount[el]||0)+1; });
+    }
+    if(r.clicked) b.clicked++;
+    if(r.replied) b.replied++;  // VER5 추가
+  });
+  return Object.values(brandMap).map(b=>({
+    ...b,
+    instaRng:  instaRange(b.instaVal),
+    naverRng:  naverRange(b.naverVal),
+    openRate:  b.sent>=2?+(b.opened/b.sent*100).toFixed(1):null,   // n<2 → null
+    clickRate: b.sent>=2?+(b.clicked/b.sent*100).toFixed(1):null,  // n<2 → null
+    replyRate: b.sent>=2?+(b.replied/b.sent*100).toFixed(1):null,
+    bestDay:   Object.entries(b.dayCount).sort((a,x)=>x[1]-a[1])[0]?.[0]||'-',
+    bestTime:  Object.entries(b.timeCount).sort((a,x)=>x[1]-a[1])[0]?.[0]||'-',
+    bestCopy:  Object.entries(b.copyCount).sort((a,x)=>x[1]-a[1]).slice(0,2).map(([k])=>k).join(' + ')||'-',
+  }));
+}
+
+// ═══════════════════════════════════════════════════
+// 브랜드 분석 탭 — 필터 UI
+// ═══════════════════════════════════════════════════
+function renderBrandFilters() {
+  const cats=[...new Set(allBrandRecords.map(r=>r.category).filter(v=>v&&v!=='내부'))].sort((a,b)=>a==='기타'?1:b==='기타'?-1:a.localeCompare(b,'ko'));
+  document.getElementById('brand-cat-chips').innerHTML=cats.map(cat=>`<label class="cat-chip" data-val="${cat}" onclick="toggleBrandCat(this)">${cat}</label>`).join('');
+  document.getElementById('brand-insta-chips').innerHTML=INSTA_RANGES.map(r=>`<div class="size-chip" data-val="${r}" onclick="toggleBrandInsta(this)">${r}</div>`).join('');
+  document.getElementById('brand-naver-chips').innerHTML=NAVER_RANGES.map(r=>`<div class="size-chip" data-val="${r}" onclick="toggleBrandNaver(this)">${r}</div>`).join('');
+}
+function toggleBrandCat(el)   {el.classList.toggle('active'); applyBrandFilters();}
+function toggleBrandInsta(el) {el.classList.toggle('active'); applyBrandFilters();}
+function toggleBrandNaver(el)  {el.classList.toggle('active'); applyBrandFilters();}
+
+// ═══════════════════════════════════════════════════
+// 브랜드 분석 탭 — 필터 적용
+// ═══════════════════════════════════════════════════
+function getBrandFilters() {
+  return {
+    dateStart:       document.getElementById('bDateStart').value,
+    dateEnd:         document.getElementById('bDateEnd').value,
+    activeCats:      [...document.querySelectorAll('#brand-cat-chips .cat-chip.active')].map(el=>el.dataset.val),
+    activeInstaRngs: [...document.querySelectorAll('#brand-insta-chips .size-chip.active')].map(el=>el.dataset.val),
+    activeNaverRngs: [...document.querySelectorAll('#brand-naver-chips .size-chip.active')].map(el=>el.dataset.val),
+  };
+}
+function setBrandPreset(el) {
+  const today=new Date(), fmt=d=>d.toISOString().slice(0,10), preset=el.dataset.preset;
+  document.querySelectorAll('#tab-brand .preset-chip').forEach(c=>c.classList.remove('active'));
+  el.classList.add('active');
+  if(preset==='7d'){const s=new Date(today); s.setDate(today.getDate()-6); document.getElementById('bDateStart').value=fmt(s); document.getElementById('bDateEnd').value=fmt(today);}
+  else if(preset==='30d'){const s=new Date(today); s.setDate(today.getDate()-29); document.getElementById('bDateStart').value=fmt(s); document.getElementById('bDateEnd').value=fmt(today);}
+  else if(preset==='mon'){document.getElementById('bDateStart').value=fmt(new Date(today.getFullYear(),today.getMonth(),1)); document.getElementById('bDateEnd').value=fmt(today);}
+  else{document.getElementById('bDateStart').value=''; document.getElementById('bDateEnd').value='';}
+  applyBrandFilters();
+}
+function onBrandDateInput(){document.querySelectorAll('#tab-brand .preset-chip').forEach(c=>c.classList.remove('active')); applyBrandFilters();}
+function resetBrandFilters(){
+  document.getElementById('bDateStart').value=''; document.getElementById('bDateEnd').value='';
+  document.querySelectorAll('#tab-brand .cat-chip.active,#tab-brand .size-chip.active,#tab-brand .preset-chip.active').forEach(el=>el.classList.remove('active'));
+  brandSortState={col:'openRate',dir:'desc'}; applyBrandFilters();
+}
+function applyBrandFilters() {
+  brandPage=1;
+  const {dateStart,dateEnd,activeCats,activeInstaRngs,activeNaverRngs}=getBrandFilters();
+  let records=allBrandRecords;
+  if(dateStart||dateEnd) records=records.filter(r=>{ if(dateStart&&r.sendDate<dateStart)return false; if(dateEnd&&r.sendDate>dateEnd)return false; return true; });
+  let brands=aggregateBrands(records);
+  if(activeCats.length)      brands=brands.filter(b=>activeCats.includes(b.category));
+  if(activeInstaRngs.length) brands=brands.filter(b=>activeInstaRngs.includes(b.instaRng));
+  if(activeNaverRngs.length)  brands=brands.filter(b=>activeNaverRngs.includes(b.naverRng));
+  brands.sort((a,x)=>{ const {col,dir}=brandSortState, va=a[col]??-1, vb=x[col]??-1; return dir==='desc'?vb-va:va-vb; });
+  filteredBrandsCache=brands;
+  // 필터된 브랜드명 기준 records 좁힘 → KPI 계산에 사용
+  const filteredNames=new Set(brands.map(b=>b.name));
+  filteredBrandRecordsCache=records.filter(r=>filteredNames.has(r.name));
+  renderBrandKPIs(brands, filteredBrandRecordsCache);  // VER5 신규
+  renderBrandCatChart(filteredBrandRecordsCache);
+  renderBrandInstaChart(filteredBrandRecordsCache);
+  renderBrandDayChart(filteredBrandRecordsCache);
+  renderBrandCopyChart(filteredBrandRecordsCache);
+  renderDynAxisChips();
+  renderDynamicMatrix(filteredBrandRecordsCache);
+  renderBrandTable(brands);
+  const countEl=document.getElementById('brand-filter-count');
+  if(countEl) countEl.textContent=`${brands.length}개 브랜드`;
+}
+function sortBrandBy(col){
+  brandSortState.col===col?(brandSortState.dir=brandSortState.dir==='desc'?'asc':'desc'):(brandSortState.col=col,brandSortState.dir='desc');
+  brandPage=1; applyBrandFilters();
+}
+
+// ═══════════════════════════════════════════════════
+// 브랜드 분석 탭 — 테이블 렌더
+// "최적 시간대" → "발송 시간대" (VER5)
+// n<2 이면 openRate/clickRate null → "–" 표시 (VER5)
+// ═══════════════════════════════════════════════════
+function renderBrandTable(brands) {
+  filteredBrandsCache=brands;
+  const countEl=document.getElementById('brand-count-label');
+  if(countEl) countEl.textContent=`총 ${brands.length}개`;
+  const headerCols=[
+    {label:'브랜드명',key:null},{label:'카테고리',key:null},
+    {label:'인스타 규모',key:null},{label:'네이버 관심',key:null},
+    {label:'발송횟수',key:'sent',sort:true},
+    {label:'오픈율',key:'openRate',sort:true},
+    {label:'오픈수',key:'opened',sort:true},
+    {label:'클릭율',key:'clickRate',sort:true},
+    {label:'클릭수',key:'clicked',sort:true},
+    {label:'최적 요일',key:null},{label:'발송 시간대',key:null},{label:'최적 카피요소',key:null},
+  ];
+  document.getElementById('brand-table-head').innerHTML='<tr>'+headerCols.map(col=>{ if(!col.sort)return `<th>${col.label}</th>`; const cls=brandSortState.col===col.key?`sort-${brandSortState.dir}`:''; return `<th class="sortable ${cls}" onclick="sortBrandBy('${col.key}')">${col.label}</th>`; }).join('')+'</tr>';
+  const bodyEl=document.getElementById('brand-table-body');
+  if(!brands.length){bodyEl.innerHTML=`<tr><td colspan="10" class="no-data">해당 조건의 브랜드가 없습니다.</td></tr>`; document.getElementById('brand-pagination').innerHTML=''; return;}
+  const total=brands.length, totalPages=Math.max(1,Math.ceil(total/PAGE_SIZE));
+  brandPage=Math.min(brandPage,totalPages);
+  const pageItems=brands.slice((brandPage-1)*PAGE_SIZE,brandPage*PAGE_SIZE);
+  bodyEl.innerHTML=pageItems.map(b=>{
+    const bestCopyShort=b.bestCopy.length>30?b.bestCopy.slice(0,30)+'…':b.bestCopy;
+    const openDisp =b.openRate !==null?b.openRate.toFixed(1)+'%':'–';
+    const clickDisp=b.clickRate!==null?b.clickRate.toFixed(1)+'%':'–';
+    return `<tr>
+      <td style="font-weight:600;color:#e8e8e8">${b.name}</td>
+      <td><span class="badge ${b.category?'badge-cat':'badge-empty'}">${b.category||'미입력'}</span></td>
+      <td style="font-size:12px;color:#888">${b.instaRng||'–'}</td>
+      <td style="font-size:12px;color:#888">${b.naverRng||'–'}</td>
+      <td style="text-align:right;color:#aaa">${b.sent}</td>
+      <td class="${rateClass(b.openRate)}">${openDisp}</td>
+      <td style="color:#aaa">${b.openRate!==null?b.opened:'–'}</td>
+      <td class="${rateClass(b.clickRate)}">${clickDisp}</td>
+      <td style="color:#aaa">${b.clickRate!==null?b.clicked:'–'}</td>
+      <td style="color:#aaa;text-align:center">${b.bestDay}</td>
+      <td style="color:#aaa;text-align:center">${b.bestTime||'–'}</td>
+      <td style="font-size:11px;color:#777" title="${b.bestCopy}">${bestCopyShort}</td>
+    </tr>`;
+  }).join('');
+  renderPagination('brand-pagination',total,brandPage,'setBrandPage');
+}
+
+
+
+
+// ═══════════════════════════════════════════════════
+// Dynamic Matrix — 상수 및 상태
+// ═══════════════════════════════════════════════════
+const AXIS_OPTIONS = [
+  { key:'category',  label:'카테고리' },
+  { key:'instaRng',  label:'인스타 규모' },
+  { key:'naverRng',  label:'네이버 규모' },
+  { key:'dayOfWeek', label:'요일' },
+  { key:'timeSlot',  label:'시간대' },
+];
+let dynMatRow = 'instaRng';   // 기본값: 인스타 규모
+let dynMatCol = 'dayOfWeek';  // 기본값: 요일
+
+function getAxisVal(r, key) {
+  if (key === 'category')  return r.category  || '기타';
+  if (key === 'instaRng')  return r.instaRng  || instaRange(r.instaVal) || '';
+  if (key === 'naverRng')  return r.naverRng  || naverRange(r.naverVal) || '';
+  if (key === 'dayOfWeek') return r.dayOfWeek || '';
+  if (key === 'timeSlot')  return r.timeSlot  || '';
+  return '';
+}
+function getAxisOrder(key, valueSet) {
+  if (key === 'instaRng')  return INSTA_RANGES.filter(v => valueSet.has(v));
+  if (key === 'naverRng')  return NAVER_RANGES.filter(v => valueSet.has(v));
+  if (key === 'dayOfWeek') return DAY_ORDER.filter(v => valueSet.has(v));
+  return [...valueSet].filter(v=>v).sort((a,b)=>a==='기타'?1:b==='기타'?-1:a.localeCompare(b,'ko'));
+}
+function getAxisLabel(key) { return (AXIS_OPTIONS.find(o=>o.key===key)||{}).label||key; }
+
+// ─ 축 칩 UI 렌더
+function renderDynAxisChips() {
+  const makeChips = (type, activeKey) =>
+    AXIS_OPTIONS.map(o =>
+      `<div class="axis-chip${o.key===activeKey?' active':''}" onclick="setDynAxis('${type}','${o.key}')">${o.label}</div>`
+    ).join('');
+  document.getElementById('dyn-row-chips').innerHTML = makeChips('row', dynMatRow);
+  document.getElementById('dyn-col-chips').innerHTML = makeChips('col', dynMatCol);
+}
+
+function setDynAxis(type, key) {
+  if (type === 'row') {
+    if (key === dynMatCol) dynMatCol = dynMatRow; // swap
+    dynMatRow = key;
+  } else {
+    if (key === dynMatRow) dynMatRow = dynMatCol; // swap
+    dynMatCol = key;
+  }
+  renderDynAxisChips();
+  renderDynamicMatrix(filteredBrandRecordsCache);
+}
+
+// ─ 매트릭스 렌더
+function renderDynamicMatrix(records) {
+  const container = document.getElementById('dyn-matrix-container');
+  if (!container) return;
+  if (!records.length) { container.innerHTML = '<div class="no-data">데이터 없음</div>'; return; }
+
+  const rowSet = new Set(), colSet = new Set();
+  records.forEach(r => { const rv=getAxisVal(r,dynMatRow), cv=getAxisVal(r,dynMatCol); if(rv)rowSet.add(rv); if(cv)colSet.add(cv); });
+
+  const rowVals = getAxisOrder(dynMatRow, rowSet);
+  const colVals = getAxisOrder(dynMatCol, colSet);
+  if (!rowVals.length || !colVals.length) { container.innerHTML='<div class="no-data">데이터 없음</div>'; return; }
+
+  // 집계
+  const mat = {};
+  records.forEach(r => {
+    const rv=getAxisVal(r,dynMatRow), cv=getAxisVal(r,dynMatCol);
+    if(!rv||!cv) return;
+    if(!mat[rv]) mat[rv]={};
+    if(!mat[rv][cv]) mat[rv][cv]={opened:0,total:0};
+    mat[rv][cv].total++;
+    if(r.opened) mat[rv][cv].opened++;
+  });
+
+  let h = '<div class="matrix-wrap"><table class="matrix-table"><thead><tr>';
+  h += `<th class="matrix-th-label">${getAxisLabel(dynMatRow)} \ ${getAxisLabel(dynMatCol)}</th>`;
+  colVals.forEach(cv => { h += `<th>${cv}</th>`; });
+  h += '</tr></thead><tbody>';
+  rowVals.forEach(rv => {
+    h += `<tr><td class="matrix-row-label">${rv}</td>`;
+    colVals.forEach(cv => {
+      const d = mat[rv]?.[cv];
+      if (!d || d.total < 2) { h += '<td class="matrix-cell empty">–</td>'; return; }
+      const rate=d.opened/d.total, p=(rate*100).toFixed(0);
+      const lvl=rate>=0.6?'high':rate>=0.35?'mid':'low', dim=d.total<3?' dim':'';
+      h += `<td class="matrix-cell ${lvl}${dim}" title="${rv} × ${cv}: ${d.opened}/${d.total}명 오픈"><span class="matrix-pct ${lvl}">${p}%</span><span class="matrix-n">n=${d.total}</span></td>`;
+    });
+    h += '</tr>';
+  });
+  h += '</tbody></table></div>';
+  container.innerHTML = h;
+}
+
+// ─ Dynamic Matrix 내보내기
+function exportDynMatrix(isFiltered) {
+  const records = isFiltered ? filteredBrandRecordsCache : allBrandRecords;
+  const rowSet=new Set(), colSet=new Set();
+  records.forEach(r=>{ const rv=getAxisVal(r,dynMatRow),cv=getAxisVal(r,dynMatCol); if(rv)rowSet.add(rv); if(cv)colSet.add(cv); });
+  const rowVals=getAxisOrder(dynMatRow,rowSet), colVals=getAxisOrder(dynMatCol,colSet);
+  const mat={};
+  records.forEach(r=>{ const rv=getAxisVal(r,dynMatRow),cv=getAxisVal(r,dynMatCol); if(!rv||!cv)return; if(!mat[rv])mat[rv]={}; if(!mat[rv][cv])mat[rv][cv]={opened:0,total:0}; mat[rv][cv].total++; if(r.opened)mat[rv][cv].opened++; });
+  exportSheet(
+    [getAxisLabel(dynMatRow)+' \ '+getAxisLabel(dynMatCol), ...colVals],
+    rowVals.map(rv=>[rv, ...colVals.map(cv=>{ const d=mat[rv]?.[cv]; return d&&d.total>=2?+(d.opened/d.total*100).toFixed(0)+'%':'–'; })]),
+    `데얼스_DynMatrix_${getAxisLabel(dynMatRow)}x${getAxisLabel(dynMatCol)}_${isFiltered?'필터':'전체'}`,
+    'DynamicMatrix'
+  );
+}
+
+// ═══════════════════════════════════════════════════
+// 브랜드 분석 탭 — 차트 렌더
+// ═══════════════════════════════════════════════════
+function renderBrandCatChart(records) {
+  destroyChart('brandCatChart');
+  const map = {};
+  records.forEach(r => {
+    const cat = r.category || '기타';
+    if (!map[cat]) map[cat] = {opened:0, total:0};
+    map[cat].total++;
+    if (r.opened) map[cat].opened++;
+  });
+  if (!Object.keys(map).length) return;
+  const labels = Object.keys(map).sort((a,b)=>a==='기타'?1:b==='기타'?-1:(map[b].opened/map[b].total)-(map[a].opened/map[a].total));
+  const values = labels.map(l => map[l].total>=2 ? +(map[l].opened/map[l].total*100).toFixed(1) : null);
+  const counts = labels.map(l => map[l]);
+  const COLORS = ['#ff6b00','#ff8c33','#ffad66','#e65c00','#cc5200','#b34700','#ffd700'];
+  charts['brandCatChart'] = new Chart(document.getElementById('brandCatChart'), {
+    type: 'bar',
+    data: {labels, datasets:[{label:'카테고리별 오픈율', data:values, backgroundColor:labels.map((_,i)=>COLORS[i%COLORS.length]+'cc'), borderRadius:6}]},
+    options: {responsive:true, maintainAspectRatio:false,
+      scales:{y:{beginAtZero:true,max:110,grid:{color:GRID},ticks:{...AXIS,callback:v=>v+'%'}},x:{grid:{display:false},ticks:{color:'#bbb',font:{size:13}}}},
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>` 오픈율: ${ctx.parsed.y}%`,afterLabel:ctx=>{const d=counts[ctx.dataIndex];return ` ${d.total}건 중 ${d.opened}건 오픈`;}}}}
+    }
+  });
+}
+
+let brandSizeMode = 'insta';
+function setBrandSizeMode(mode) {
+  brandSizeMode = mode;
+  document.getElementById('size-mode-insta').classList.toggle('active', mode==='insta');
+  document.getElementById('size-mode-naver').classList.toggle('active', mode==='naver');
+  const titles = {insta:'인스타 규모별 오픈율', naver:'네이버 관심고객 규모별 오픈율'};
+  document.getElementById('brand-size-title').textContent = titles[mode];
+  renderBrandInstaChart(filteredBrandRecordsCache);
+}
+
+function renderBrandInstaChart(records) {
+  destroyChart('brandInstaChart');
+  const isNaver = brandSizeMode === 'naver';
+  const RANGES = isNaver ? NAVER_RANGES : INSTA_RANGES;
+  const getRng = r => isNaver
+    ? (r.naverRng || naverRange(r.naverVal) || '')
+    : (r.instaRng || instaRange(r.instaVal) || '');
+  const map = {};
+  records.forEach(r => {
+    const rng = getRng(r); if (!rng) return;
+    if (!map[rng]) map[rng] = {opened:0, total:0};
+    map[rng].total++;
+    if (r.opened) map[rng].opened++;
+  });
+  const labels = RANGES.filter(r => map[r]);
+  const nodata = document.getElementById('brand-insta-nodata');
+  if (!labels.length) { if(nodata) nodata.style.display='block'; return; }
+  if(nodata) nodata.style.display='none';
+  const chartTitle = isNaver ? '네이버 관심고객 규모별 오픈율' : '인스타 규모별 오픈율';
+  const values = labels.map(l => map[l].total>=2 ? +(map[l].opened/map[l].total*100).toFixed(1) : null);
+  const counts = labels.map(l => map[l]);
+  charts['brandInstaChart'] = new Chart(document.getElementById('brandInstaChart'), {
+    type: 'bar',
+    data: {labels, datasets:[{label: chartTitle, data:values, backgroundColor:'rgba(255,107,0,0.65)', borderRadius:6}]},
+    options: {responsive:true, maintainAspectRatio:false,
+      scales:{y:{beginAtZero:true,max:110,grid:{color:GRID},ticks:{...AXIS,callback:v=>v+'%'}},x:{grid:{display:false},ticks:{color:'#aaa',font:{size:12}}}},
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>ctx.parsed.y!==null?` 오픈율: ${ctx.parsed.y}%`:' 데이터 부족',afterLabel:ctx=>{const d=counts[ctx.dataIndex];return ` ${d.total}건 중 ${d.opened}건 오픈`;}}}}
+    }
+  });
+}
+
+function renderBrandDayChart(records) {
+  destroyChart('brandDayChart');
+  const map = {};
+  records.forEach(r => {
+    if (!r.dayOfWeek) return;
+    if (!map[r.dayOfWeek]) map[r.dayOfWeek] = {opened:0, total:0};
+    map[r.dayOfWeek].total++;
+    if (r.opened) map[r.dayOfWeek].opened++;
+  });
+  const labels = DAY_ORDER.filter(d => map[d]); if (!labels.length) return;
+  const values = labels.map(d => map[d].total>=2 ? +(map[d].opened/map[d].total*100).toFixed(1) : null);
+  const counts = labels.map(d => map[d]);
+  const maxVal = Math.max(...values.filter(v=>v!==null));
+  charts['brandDayChart'] = new Chart(document.getElementById('brandDayChart'), {
+    type: 'bar',
+    data: {labels, datasets:[{label:'요일별 오픈율', data:values, backgroundColor:values.map(v=>v===maxVal?'rgba(255,107,0,0.9)':'rgba(255,107,0,0.45)'), borderRadius:6}]},
+    options: {responsive:true, maintainAspectRatio:false,
+      scales:{y:{beginAtZero:true,max:110,grid:{color:GRID},ticks:{...AXIS,callback:v=>v+'%'}},x:{grid:{display:false},ticks:{color:'#aaa',font:{size:14}}}},
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>ctx.parsed.y!==null?` 오픈율: ${ctx.parsed.y}%`:' 데이터 부족',afterLabel:ctx=>{const d=counts[ctx.dataIndex];return ` ${d.total}건 중 ${d.opened}건 오픈`;}}}}
+    }
+  });
+}
+
+function renderBrandCopyChart(records) {
+  destroyChart('brandCopyChart');
+  const map = {};
+  COPY_ELS.forEach(el => { map[el] = {opened:0, total:0}; });
+  records.forEach(r => {
+    COPY_ELS.forEach(el => {
+      if ((r.copy[el]||'').toUpperCase() !== 'Y') return;
+      map[el].total++;
+      if (r.opened) map[el].opened++;
+    });
+  });
+  const values = COPY_ELS.map(el => map[el].total>=2 ? +(map[el].opened/map[el].total*100).toFixed(1) : null);
+  const counts = COPY_ELS.map(el => map[el]);
+  charts['brandCopyChart'] = new Chart(document.getElementById('brandCopyChart'), {
+    type: 'bar',
+    data: {labels:COPY_ELS, datasets:[{label:'카피요소 포함 시 오픈율', data:values, backgroundColor:'rgba(255,107,0,0.7)', borderRadius:4}]},
+    options: {responsive:true, maintainAspectRatio:false, indexAxis:'y',
+      scales:{x:{beginAtZero:true,max:110,grid:{color:GRID},ticks:{...AXIS,callback:v=>v+'%'}},y:{grid:{display:false},ticks:{color:'#bbb',font:{size:12}}}},
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>ctx.parsed.x!==null?` 오픈율: ${ctx.parsed.x}%`:' 데이터 부족 (n<2)',afterLabel:ctx=>{const d=counts[ctx.dataIndex];return ` ${d.total}건 중 ${d.opened}건 오픈`;}}}}
+    }
+  });
+}
+
+// ═══════════════════════════════════════════════════
+// 공통 엑셀 내보내기 유틸
+// ═══════════════════════════════════════════════════
+function exportSheet(headers, rows, filename, sheetName) {
+  if (typeof XLSX === 'undefined') { alert('Excel 라이브러리 로딩 중입니다. 잠시 후 다시 시도해주세요.'); return; }
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+  ws['!cols'] = headers.map(h => ({ wch: Math.max([...h].reduce((a,c)=>a+(c.charCodeAt(0)>127?2:1),0)+2, 10) }));
+  XLSX.utils.book_append_sheet(wb, ws, sheetName);
+  XLSX.writeFile(wb, filename + '_' + new Date().toISOString().slice(0,10) + '.xlsx');
+}
+
+// ── Top5 내보내기
+function exportTop5(isFiltered) {
+  const camps = isFiltered ? filteredCampsCache : allCampaigns;
+  const latest = [...camps].sort((a,b)=>b['발송일'].localeCompare(a['발송일']))[0];
+  if (!latest) { alert('데이터 없음'); return; }
+  if (typeof XLSX === 'undefined') { alert('Excel 라이브러리 로딩 중입니다.'); return; }
+  const latestRecip = allRecipients.filter(r=>r['캠페인ID']===latest['캠페인ID']&&r['구분']==='외부');
+  const byOpen  = [...latestRecip].filter(r=>parseInt(r['오픈수'])>0).sort((a,b)=>parseInt(b['오픈수'])-parseInt(a['오픈수'])).slice(0,5);
+  const byClick = [...latestRecip].filter(r=>parseInt(r['클릭수'])>0).sort((a,b)=>parseInt(b['클릭수'])-parseInt(a['클릭수'])).slice(0,5);
+  const wb = XLSX.utils.book_new();
+  const makeWs = (items, key) => XLSX.utils.aoa_to_sheet([['순위','회사명','카테고리',key], ...items.map((r,i)=>[i+1, r['닉네임/회사명']||'', r['브랜드카테고리']||'', parseInt(r[key])||0])]);
+  XLSX.utils.book_append_sheet(wb, makeWs(byOpen,'오픈수'), '오픈Top5');
+  XLSX.utils.book_append_sheet(wb, makeWs(byClick,'클릭수'), '클릭Top5');
+  XLSX.writeFile(wb, `데얼스_Top5_${isFiltered?'필터':'전체'}_${latest['캠페인ID']}_${new Date().toISOString().slice(0,10)}.xlsx`);
+}
+
+// ── 회신 브랜드 내보내기
+function exportReplyData(isFiltered) {
+  const ids = isFiltered ? new Set(filteredCampsCache.map(c=>c['캠페인ID'])) : null;
+  const replied = allRecipients
+    .filter(r=>r['구분']==='외부'&&String(r['회신여부']).trim()==='Y'&&(!ids||ids.has(r['캠페인ID'])))
+    .sort((a,b)=>(b['최초회신일시']||'').localeCompare(a['최초회신일시']||''));
+  exportSheet(
+    ['캠페인ID','발송일','회사명','브랜드카테고리','최초회신일시','회신내용요약'],
+    replied.map(r=>[r['캠페인ID']||'',r['발송일']||'',r['닉네임/회사명']||'',r['브랜드카테고리']||'',r['최초회신일시']||'',r['회신내용요약']||'']),
+    `데얼스_회신브랜드_${isFiltered?'필터':'전체'}`, '회신브랜드'
+  );
+}
+
+// ── 추이 차트 내보내기
+function exportTrend(isFiltered) {
+  const camps = isFiltered ? filteredCampsCache : allCampaigns;
+  const sorted = [...camps].sort((a,b)=>a['발송일'].localeCompare(b['발송일']));
+  exportSheet(
+    ['캠페인ID','발송일','외부 오픈율(%)'],
+    sorted.map(c=>[c['캠페인ID'], c['발송일'], pct(c['오픈율 (외부)'])??'']),
+    `데얼스_오픈율추이_${isFiltered?'필터':'전체'}`, '오픈율추이'
+  );
+}
+
+// ── 시간대 차트 내보내기
+function exportTimeData(isFiltered) {
+  const camps = isFiltered ? filteredCampsCache : allCampaigns;
+  const map = {};
+  camps.forEach(c=>{ const t=c['발송시간대']||'기타', r=pct(c['오픈율 (외부)']); if(r===null)return; if(!map[t])map[t]={sum:0,cnt:0}; map[t].sum+=r; map[t].cnt++; });
+  exportSheet(
+    ['발송 시간대','평균 외부 오픈율(%)','캠페인 수'],
+    Object.keys(map).sort().map(t=>[t, +(map[t].sum/map[t].cnt).toFixed(1), map[t].cnt]),
+    `데얼스_시간대별오픈율_${isFiltered?'필터':'전체'}`, '시간대별오픈율'
+  );
+}
+
+// ── 요일 차트 내보내기
+function exportDayData(isFiltered) {
+  const camps = isFiltered ? filteredCampsCache : allCampaigns;
+  const DAY_NAMES = ['일','월','화','수','목','금','토'];
+  const map = {};
+  camps.forEach(c=>{ if(!c['발송일'])return; const day=DAY_NAMES[new Date(c['발송일']).getDay()]; const r=pct(c['오픈율 (외부)']); if(r===null)return; if(!map[day])map[day]={sum:0,cnt:0}; map[day].sum+=r; map[day].cnt++; });
+  exportSheet(
+    ['요일','평균 외부 오픈율(%)','캠페인 수'],
+    DAY_ORDER.filter(d=>map[d]).map(d=>[d, +(map[d].sum/map[d].cnt).toFixed(1), map[d].cnt]),
+    `데얼스_요일별오픈율_${isFiltered?'필터':'전체'}`, '요일별오픈율'
+  );
+}
+
+// ── 카테고리 차트 내보내기
+function exportCategoryData(isFiltered) {
+  const camps = isFiltered ? filteredCampsCache : allCampaigns;
+  const filteredIds = new Set(camps.map(c=>c['캠페인ID']));
+  if (allRecipients.length > 0) {
+    const map = {};
+    allRecipients.filter(r=>filteredIds.has(r['캠페인ID'])&&r['구분']==='외부').forEach(r=>{ const cat=r['브랜드카테고리']||'기타'; if(cat==='내부')return; if(!map[cat])map[cat]={opened:0,total:0}; map[cat].total++; if(parseInt(r['오픈수'])>0)map[cat].opened++; });
+    exportSheet(
+      ['카테고리','오픈율(%)','수신자 수','오픈 수'],
+      Object.entries(map).sort((a,b)=>a[0]==='기타'?1:b[0]==='기타'?-1:(b[1].opened/b[1].total)-(a[1].opened/a[1].total)).map(([cat,d])=>[cat, +(d.opened/d.total*100).toFixed(1), d.total, d.opened]),
+      `데얼스_카테고리오픈율_${isFiltered?'필터':'전체'}`, '카테고리별오픈율'
+    );
+  } else {
+    const map = {};
+    allEmailList.filter(r=>filteredIds.has(r['캠페인ID'])).forEach(r=>{ const cat=r['카테고리']||''; if(!cat)return; const rate=pct(r['오픈율 (외부)']); if(rate===null)return; if(!map[cat])map[cat]={sum:0,cnt:0}; map[cat].sum+=rate; map[cat].cnt++; });
+    exportSheet(
+      ['카테고리','평균 오픈율(%)','캠페인 수'],
+      Object.entries(map).map(([cat,d])=>[cat, +(d.sum/d.cnt).toFixed(1), d.cnt]),
+      `데얼스_카테고리오픈율_${isFiltered?'필터':'전체'}`, '카테고리별오픈율'
+    );
+  }
+}
+
+// ── 카피요소 차트 내보내기
+function exportCopyData(isFiltered) {
+  const camps = isFiltered ? filteredCampsCache : allCampaigns;
+  const filteredIds = new Set(camps.map(c=>c['캠페인ID']));
+  const emailList = allEmailList.filter(r=>filteredIds.has(r['캠페인ID']));
+  exportSheet(
+    ['카피요소','Y 평균오픈율(%)','N 평균오픈율(%)','Y 건수','N 건수'],
+    COPY_ELS.map(el=>{
+      const y=emailList.filter(r=>r[el]==='Y').map(r=>pct(r['오픈율 (외부)'])).filter(v=>v!==null);
+      const n=emailList.filter(r=>r[el]==='N').map(r=>pct(r['오픈율 (외부)'])).filter(v=>v!==null);
+      return [el, avg(y)!==null?+avg(y).toFixed(1):'', avg(n)!==null?+avg(n).toFixed(1):'', y.length, n.length];
+    }),
+    `데얼스_카피요소오픈율_${isFiltered?'필터':'전체'}`, '카피요소별오픈율'
+  );
+}
+
+// ── 카피×카테고리 매트릭스 내보내기
+function exportCopyCatMatrix(isFiltered) {
+  const camps = isFiltered ? filteredCampsCache : allCampaigns;
+  const filteredIds = new Set(camps.map(c=>c['캠페인ID']));
+  const copyMap = {}; allEmailList.forEach(r=>{ if(filteredIds.has(r['캠페인ID']))copyMap[r['캠페인ID']]=r; });
+  const matrix = {}; COPY_ELS.forEach(el=>{matrix[el]={};});
+  const catSet = new Set();
+  allRecipients.filter(r=>filteredIds.has(r['캠페인ID'])&&r['구분']==='외부').forEach(r=>{
+    const cat=r['브랜드카테고리']||'기타'; if(cat==='내부')return; catSet.add(cat);
+    const camp=copyMap[r['캠페인ID']]; if(!camp)return;
+    const opened=parseInt(r['오픈수'])>0;
+    COPY_ELS.forEach(el=>{ if((camp[el]||'').toUpperCase()!=='Y')return; if(!matrix[el][cat])matrix[el][cat]={opened:0,total:0}; matrix[el][cat].total++; if(opened)matrix[el][cat].opened++; });
+  });
+  const cats = [...catSet].sort((a,b)=>a==='기타'?1:b==='기타'?-1:a.localeCompare(b,'ko'));
+  exportSheet(
+    ['카피요소', ...cats],
+    COPY_ELS.map(el=>[el, ...cats.map(cat=>{ const d=matrix[el][cat]; return d&&d.total>=2?+(d.opened/d.total*100).toFixed(0)+'%':'–'; })]),
+    `데얼스_카피카테고리매트릭스_${isFiltered?'필터':'전체'}`, '카피×카테고리'
+  );
+}
+
+// ── 브랜드 카테고리 차트 내보내기
+function exportBrandCatData(isFiltered) {
+  const records = isFiltered ? filteredBrandRecordsCache : allBrandRecords;
+  const map = {};
+  records.forEach(r=>{ const cat=r.category||'기타'; if(!map[cat])map[cat]={opened:0,total:0}; map[cat].total++; if(r.opened)map[cat].opened++; });
+  exportSheet(
+    ['카테고리','오픈율(%)','발송 건수','오픈 건수'],
+    Object.entries(map).sort((a,b)=>a[0]==='기타'?1:b[0]==='기타'?-1:(b[1].opened/b[1].total)-(a[1].opened/a[1].total)).map(([cat,d])=>[cat, d.total>=2?+(d.opened/d.total*100).toFixed(1):'–', d.total, d.opened]),
+    `데얼스_브랜드카테고리_${isFiltered?'필터':'전체'}`, '카테고리별오픈율'
+  );
+}
+
+// ── 브랜드 인스타 차트 내보내기
+function exportBrandInstaData(isFiltered) {
+  const records = isFiltered ? filteredBrandRecordsCache : allBrandRecords;
+  const isNaver = brandSizeMode === 'naver';
+  const RANGES = isNaver ? NAVER_RANGES : INSTA_RANGES;
+  const getRng = r => isNaver ? (r.naverRng||naverRange(r.naverVal)||'') : (r.instaRng||instaRange(r.instaVal)||'');
+  const map = {};
+  records.forEach(r=>{ const rng=getRng(r); if(!rng)return; if(!map[rng])map[rng]={opened:0,total:0}; map[rng].total++; if(r.opened)map[rng].opened++; });
+  const label = isNaver ? '네이버 관심고객 규모' : '인스타 규모';
+  const fname = isNaver ? '네이버관심규모' : '인스타규모';
+  exportSheet(
+    [label,'오픈율(%)','발송 건수','오픈 건수'],
+    RANGES.filter(r=>map[r]).map(r=>[r, map[r].total>=2?+(map[r].opened/map[r].total*100).toFixed(1):'–', map[r].total, map[r].opened]),
+    `데얼스_브랜드${fname}_${isFiltered?'필터':'전체'}`, `${fname}별오픈율`
+  );
+}
+
+// ── 브랜드 요일 차트 내보내기
+function exportBrandDayData(isFiltered) {
+  const records = isFiltered ? filteredBrandRecordsCache : allBrandRecords;
+  const map = {};
+  records.forEach(r=>{ if(!r.dayOfWeek)return; if(!map[r.dayOfWeek])map[r.dayOfWeek]={opened:0,total:0}; map[r.dayOfWeek].total++; if(r.opened)map[r.dayOfWeek].opened++; });
+  exportSheet(
+    ['요일','오픈율(%)','발송 건수','오픈 건수'],
+    DAY_ORDER.filter(d=>map[d]).map(d=>[d, map[d].total>=2?+(map[d].opened/map[d].total*100).toFixed(1):'–', map[d].total, map[d].opened]),
+    `데얼스_브랜드요일_${isFiltered?'필터':'전체'}`, '요일별오픈율'
+  );
+}
+
+// ── 브랜드 카피요소 차트 내보내기
+function exportBrandCopyData(isFiltered) {
+  const records = isFiltered ? filteredBrandRecordsCache : allBrandRecords;
+  const map = {};
+  COPY_ELS.forEach(el=>{map[el]={opened:0,total:0};});
+  records.forEach(r=>{ COPY_ELS.forEach(el=>{ if((r.copy[el]||'').toUpperCase()!=='Y')return; map[el].total++; if(r.opened)map[el].opened++; }); });
+  exportSheet(
+    ['카피요소','오픈율(%)','발송 건수','오픈 건수'],
+    COPY_ELS.map(el=>[el, map[el].total>=2?+(map[el].opened/map[el].total*100).toFixed(1):'–', map[el].total, map[el].opened]),
+    `데얼스_브랜드카피요소_${isFiltered?'필터':'전체'}`, '카피요소별오픈율'
+  );
+}
+
+// ── 브랜드 목록 내보내기
+function exportBrandTable(isFiltered) {
+  const brands = isFiltered ? filteredBrandsCache : aggregateBrands(allBrandRecords);
+  exportSheet(
+    ['브랜드명','카테고리','인스타규모','네이버관심','발송횟수','오픈율(%)','오픈수','클릭율(%)','클릭수','최적요일','발송시간대','최적카피요소'],
+    brands.map(b=>[b.name, b.category||'', b.instaRng||'', b.naverRng||'', b.sent, b.openRate!==null?b.openRate:'–', b.openRate!==null?b.opened:'–', b.clickRate!==null?b.clickRate:'–', b.clickRate!==null?b.clicked:'–', b.bestDay, b.bestTime||'', b.bestCopy]),
+    `데얼스_브랜드목록_${isFiltered?'필터':'전체'}`, '브랜드목록'
+  );
+}
+
+// ═══════════════════════════════════════════════════
+// 초기화
+// ═══════════════════════════════════════════════════
+async function init() {
+  document.getElementById('loading').style.display='flex';
+  document.getElementById('loading').innerHTML=`<div class="spinner"></div><div class="loading-text">데이터 불러오는 중…</div>`;
+  document.getElementById('dashboard').style.display='none';
+  try {
+    const [campaigns,emailList,recipients]=await Promise.all([fetchSheet('캠페인요약'),fetchSheet('발송이메일목록'),fetchSheet('수신자마스터')]);
+    if(!campaigns.length) throw new Error('캠페인요약 탭에 데이터가 없습니다.');
+    allCampaigns=campaigns; allEmailList=emailList; allRecipients=recipients;
+    detectCopyEls(allEmailList);
+    campPage=1; replyPage=1; brandPage=1;
+    buildFilterUI(campaigns); applyFilters(); renderTop5(); renderReplyList();
+    buildBrandRecords(); renderBrandFilters(); applyBrandFilters();
+    const now=new Date();
+    document.getElementById('last-updated').textContent=`마지막 업데이트: ${now.toLocaleDateString('ko-KR')} ${now.toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'})}`;
+    document.getElementById('loading').style.display='none';
+    document.getElementById('dashboard').style.display='block';
+  } catch(err) {
+    document.getElementById('loading').innerHTML=`<div class="error-box"><strong>❌ 데이터를 불러올 수 없습니다</strong><br><br>${err.message.replace(/\n/g,'<br>')}</div>`;
+  }
+}
+
+init();
+</script>
+</body>
+</html>
