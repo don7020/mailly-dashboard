@@ -299,9 +299,9 @@ tr:hover td { background: #1a1d24; }
           <div style="position:relative;height:360px"><canvas id="brandCatChart"></canvas></div>
         </div>
         <div class="section">
-          <div class="section-title">인스타 규모별 오픈율<div class="export-btns"><button class="export-btn" onclick="exportBrandInstaData(true)">↓ 필터 기준</button><button class="export-btn" onclick="exportBrandInstaData(false)">↓ 전체</button></div></div>
+          <div class="section-title"><span id="brand-size-title">인스타 규모별 오픈율</span><div style="display:flex;align-items:center;gap:10px"><div class="axis-chips"><div class="axis-chip active" id="size-mode-insta" onclick="setBrandSizeMode('insta')">인스타</div><div class="axis-chip" id="size-mode-naver" onclick="setBrandSizeMode('naver')">네이버</div></div><div class="export-btns"><button class="export-btn" onclick="exportBrandInstaData(true)">↓ 필터 기준</button><button class="export-btn" onclick="exportBrandInstaData(false)">↓ 전체</button></div></div></div>
           <div class="chart-container"><canvas id="brandInstaChart"></canvas></div>
-          <div id="brand-insta-nodata" class="note" style="display:none;margin-top:8px">인스타팔로워 데이터 없음 — 수신자마스터에 <strong style="color:#666">인스타팔로워</strong> 컬럼 입력 필요</div>
+          <div id="brand-insta-nodata" class="note" style="display:none;margin-top:8px">데이터 없음 — 수신자마스터에 해당 컬럼 입력 필요</div>
         </div>
       </div>
       <div class="chart-grid">
@@ -430,13 +430,19 @@ function destroyChart(id) { if (charts[id]) { charts[id].destroy(); delete chart
 const GRID = '#1e2128', AXIS = { color:'#666', font:{size:11} };
 
 function instaRange(v) {
-  const n = parseInt(v); if (!n || isNaN(n)) return '';
+  if (!v) return '';
+  const s = String(v).trim();
+  if (INSTA_RANGES.includes(s)) return s;   // 이미 레이블이면 그대로
+  const n = parseInt(s); if (!n || isNaN(n)) return '';
   if (n < 500) return '~500'; if (n < 1000) return '500~1K'; if (n < 3000) return '1K~3K';
   if (n < 5000) return '3K~5K'; if (n < 7000) return '5K~7K'; if (n < 10000) return '7K~1만';
   return '1만+';
 }
 function naverRange(v) {
-  const n = parseInt(v); if (!n || isNaN(n)) return '';
+  if (!v) return '';
+  const s = String(v).trim();
+  if (NAVER_RANGES.includes(s)) return s;   // 이미 레이블이면 그대로
+  const n = parseInt(s); if (!n || isNaN(n)) return '';
   if (n < 50) return '~50'; if (n < 200) return '50~200'; if (n < 500) return '200~500';
   if (n < 1000) return '500~1K'; if (n < 2000) return '1K~2K'; if (n < 5000) return '2K~5K';
   return '5K+';
@@ -842,6 +848,18 @@ function renderCopyCategoryMatrix(filteredCampaigns) {
 // ═══════════════════════════════════════════════════
 // 브랜드 분석 탭 — 데이터 빌드
 // ═══════════════════════════════════════════════════
+function _findColVal(row, keywords) {
+  // 정확히 일치하는 키 먼저
+  for (const k of keywords) { if (k in row && row[k]) return row[k]; }
+  // 키워드가 포함된 컬럼 퍼지 탐색
+  const kk = Object.keys(row);
+  for (const keyword of keywords) {
+    const trimKw = keyword.replace(/\s/g,'');
+    const found = kk.find(k => k.replace(/\s/g,'') === trimKw);
+    if (found && row[found]) return row[found];
+  }
+  return '';
+}
 function buildBrandRecords() {
   const campMap={}, copyMap={};
   allCampaigns.forEach(c=>campMap[c['캠페인ID']]=c);
@@ -856,8 +874,8 @@ function buildBrandRecords() {
       return {
         name:     (r['닉네임/회사명']||'').trim(),
         category: r['브랜드카테고리']||'',
-        instaVal: r['인스타팔로워']||r['인스타 팔로워']||r['인스타팔로어']||r['인스타 팔로어']||'',
-        naverVal: r['네이버관심고객']||r['네이버 관심고객']||r['네이버관심']||r['네이버 관심']||'',
+        instaVal: _findColVal(r,['인스타팔로워','인스타 팔로워','인스타팔로어','인스타 팔로어'])||_findColVal(copy,['인스타팔로워','인스타 팔로워','인스타팔로어','인스타 팔로어'])||'',
+        naverVal: _findColVal(r,['네이버관심고객','네이버 관심고객','네이버관심','네이버 관심'])||_findColVal(copy,['네이버관심고객','네이버 관심고객','네이버관심','네이버 관심'])||'',
         sendDate,
         timeSlot: camp['발송시간대']||'',
         dayOfWeek:date?DAY_NAMES[date.getDay()]:'',
@@ -1036,8 +1054,8 @@ let dynMatCol = 'dayOfWeek';  // 기본값: 요일
 
 function getAxisVal(r, key) {
   if (key === 'category')  return r.category  || '기타';
-  if (key === 'instaRng')  return r.instaRng  || '';
-  if (key === 'naverRng')  return r.naverRng  || '';
+  if (key === 'instaRng')  return r.instaRng  || instaRange(r.instaVal) || '';
+  if (key === 'naverRng')  return r.naverRng  || naverRange(r.naverVal) || '';
   if (key === 'dayOfWeek') return r.dayOfWeek || '';
   if (key === 'timeSlot')  return r.timeSlot  || '';
   return '';
@@ -1158,24 +1176,40 @@ function renderBrandCatChart(records) {
   });
 }
 
+let brandSizeMode = 'insta';
+function setBrandSizeMode(mode) {
+  brandSizeMode = mode;
+  document.getElementById('size-mode-insta').classList.toggle('active', mode==='insta');
+  document.getElementById('size-mode-naver').classList.toggle('active', mode==='naver');
+  const titles = {insta:'인스타 규모별 오픈율', naver:'네이버 관심고객 규모별 오픈율'};
+  document.getElementById('brand-size-title').textContent = titles[mode];
+  renderBrandInstaChart(filteredBrandRecordsCache);
+}
+
 function renderBrandInstaChart(records) {
   destroyChart('brandInstaChart');
+  const isNaver = brandSizeMode === 'naver';
+  const RANGES = isNaver ? NAVER_RANGES : INSTA_RANGES;
+  const getRng = r => isNaver
+    ? (r.naverRng || naverRange(r.naverVal) || '')
+    : (r.instaRng || instaRange(r.instaVal) || '');
   const map = {};
   records.forEach(r => {
-    const rng = r.instaRng || ''; if (!rng) return;
+    const rng = getRng(r); if (!rng) return;
     if (!map[rng]) map[rng] = {opened:0, total:0};
     map[rng].total++;
     if (r.opened) map[rng].opened++;
   });
-  const labels = INSTA_RANGES.filter(r => map[r]);
+  const labels = RANGES.filter(r => map[r]);
   const nodata = document.getElementById('brand-insta-nodata');
   if (!labels.length) { if(nodata) nodata.style.display='block'; return; }
   if(nodata) nodata.style.display='none';
+  const chartTitle = isNaver ? '네이버 관심고객 규모별 오픈율' : '인스타 규모별 오픈율';
   const values = labels.map(l => map[l].total>=2 ? +(map[l].opened/map[l].total*100).toFixed(1) : null);
   const counts = labels.map(l => map[l]);
   charts['brandInstaChart'] = new Chart(document.getElementById('brandInstaChart'), {
     type: 'bar',
-    data: {labels, datasets:[{label:'인스타 규모별 오픈율', data:values, backgroundColor:'rgba(255,107,0,0.65)', borderRadius:6}]},
+    data: {labels, datasets:[{label: chartTitle, data:values, backgroundColor:'rgba(255,107,0,0.65)', borderRadius:6}]},
     options: {responsive:true, maintainAspectRatio:false,
       scales:{y:{beginAtZero:true,max:110,grid:{color:GRID},ticks:{...AXIS,callback:v=>v+'%'}},x:{grid:{display:false},ticks:{color:'#aaa',font:{size:12}}}},
       plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>ctx.parsed.y!==null?` 오픈율: ${ctx.parsed.y}%`:' 데이터 부족',afterLabel:ctx=>{const d=counts[ctx.dataIndex];return ` ${d.total}건 중 ${d.opened}건 오픈`;}}}}
@@ -1381,12 +1415,17 @@ function exportBrandCatData(isFiltered) {
 // ── 브랜드 인스타 차트 내보내기
 function exportBrandInstaData(isFiltered) {
   const records = isFiltered ? filteredBrandRecordsCache : allBrandRecords;
+  const isNaver = brandSizeMode === 'naver';
+  const RANGES = isNaver ? NAVER_RANGES : INSTA_RANGES;
+  const getRng = r => isNaver ? (r.naverRng||naverRange(r.naverVal)||'') : (r.instaRng||instaRange(r.instaVal)||'');
   const map = {};
-  records.forEach(r=>{ const rng=r.instaRng||''; if(!rng)return; if(!map[rng])map[rng]={opened:0,total:0}; map[rng].total++; if(r.opened)map[rng].opened++; });
+  records.forEach(r=>{ const rng=getRng(r); if(!rng)return; if(!map[rng])map[rng]={opened:0,total:0}; map[rng].total++; if(r.opened)map[rng].opened++; });
+  const label = isNaver ? '네이버 관심고객 규모' : '인스타 규모';
+  const fname = isNaver ? '네이버관심규모' : '인스타규모';
   exportSheet(
-    ['인스타 규모','오픈율(%)','발송 건수','오픈 건수'],
-    INSTA_RANGES.filter(r=>map[r]).map(r=>[r, map[r].total>=2?+(map[r].opened/map[r].total*100).toFixed(1):'–', map[r].total, map[r].opened]),
-    `데얼스_브랜드인스타규모_${isFiltered?'필터':'전체'}`, '인스타규모별오픈율'
+    [label,'오픈율(%)','발송 건수','오픈 건수'],
+    RANGES.filter(r=>map[r]).map(r=>[r, map[r].total>=2?+(map[r].opened/map[r].total*100).toFixed(1):'–', map[r].total, map[r].opened]),
+    `데얼스_브랜드${fname}_${isFiltered?'필터':'전체'}`, `${fname}별오픈율`
   );
 }
 
