@@ -926,9 +926,9 @@ function aggregateBrands(records) {
     ...b,
     instaRng:  instaRange(b.instaVal),
     naverRng:  naverRange(b.naverVal),
-    openRate:  b.sent>=2?+(b.opened/b.sent*100).toFixed(1):null,   // n<2 → null
-    clickRate: b.sent>=2?+(b.clicked/b.sent*100).toFixed(1):null,  // n<2 → null
-    replyRate: b.sent>=2?+(b.replied/b.sent*100).toFixed(1):null,
+    openRate:  b.sent>=1?+(b.opened/b.sent*100).toFixed(1):null,
+    clickRate: b.sent>=1?+(b.clicked/b.sent*100).toFixed(1):null,
+    replyRate: b.sent>=1?+(b.replied/b.sent*100).toFixed(1):null,
     bestDay:   Object.entries(b.dayCount).sort((a,x)=>x[1]-a[1])[0]?.[0]||'-',
     bestTime:  Object.entries(b.timeCount).sort((a,x)=>x[1]-a[1])[0]?.[0]||'-',
     bestCopy:  Object.entries(b.copyCount).sort((a,x)=>x[1]-a[1]).slice(0,2).map(([k])=>k).join(' + ')||'-',
@@ -1009,7 +1009,7 @@ function sortBrandBy(col){
 // ═══════════════════════════════════════════════════
 // 브랜드 분석 탭 — 테이블 렌더
 // "최적 시간대" → "발송 시간대" (VER5)
-// n<2 이면 openRate/clickRate null → "–" 표시 (VER5)
+// 수신자마스터 오픈수/클릭수 집계 → n>=1 이면 표시
 // ═══════════════════════════════════════════════════
 function renderBrandTable(brands) {
   filteredBrandsCache=brands;
