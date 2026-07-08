@@ -1491,7 +1491,11 @@ async function init() {
   try {
     const [campaigns,emailList,recipients]=await Promise.all([fetchSheet('캠페인요약'),fetchSheet('발송이메일목록'),fetchSheet('수신자마스터')]);
     if(!campaigns.length) throw new Error('캠페인요약 탭에 데이터가 없습니다.');
-    allCampaigns=campaigns; allEmailList=emailList; allRecipients=recipients;
+    // "광고" 키워드가 제목에 포함된 캠페인 제외
+    const adIds=new Set(campaigns.filter(c=>String(c['이메일 제목']||'').includes('광고')).map(c=>c['캠페인ID']));
+    allCampaigns=campaigns.filter(c=>!adIds.has(c['캠페인ID']));
+    allEmailList=emailList.filter(r=>!adIds.has(r['캠페인ID']));
+    allRecipients=recipients.filter(r=>!adIds.has(r['캠페인ID']));
     detectCopyEls(allEmailList);
     campPage=1; replyPage=1; brandPage=1;
     buildFilterUI(campaigns); applyFilters(); renderTop5(); renderReplyList();
