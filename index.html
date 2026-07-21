@@ -261,6 +261,24 @@ tr:hover td { background: #1a1d24; }
 
     <!-- ════ TAB: Ours ════ -->
     <div id="tab-ours" style="display:none">
+      <div class="filter-bar" style="margin-bottom:20px">
+        <div class="filter-group">
+          <div class="filter-label">날짜 범위</div>
+          <div class="filter-row">
+            <input type="date" id="oursDateStart" onchange="onSpecialDateInput('ours')">
+            <span class="date-sep">~</span>
+            <input type="date" id="oursDateEnd" onchange="onSpecialDateInput('ours')">
+          </div>
+          <div class="preset-chips" id="ours-preset-chips">
+            <div class="preset-chip" data-preset="7d"  onclick="setSpecialPreset('ours',this)">최근 7일</div>
+            <div class="preset-chip" data-preset="30d" onclick="setSpecialPreset('ours',this)">최근 30일</div>
+            <div class="preset-chip" data-preset="mon" onclick="setSpecialPreset('ours',this)">이번 달</div>
+            <div class="preset-chip" data-preset="all" onclick="setSpecialPreset('ours',this)">전체</div>
+          </div>
+        </div>
+        <button class="filter-reset" onclick="resetSpecialFilter('ours')">필터 초기화</button>
+        <div class="filter-count" id="ours-filter-count"></div>
+      </div>
       <div class="kpi-grid" id="ours-kpi-grid"></div>
       <div class="section">
         <div class="section-title">
@@ -286,6 +304,24 @@ tr:hover td { background: #1a1d24; }
 
     <!-- ════ TAB: 광고 ════ -->
     <div id="tab-ad" style="display:none">
+      <div class="filter-bar" style="margin-bottom:20px">
+        <div class="filter-group">
+          <div class="filter-label">날짜 범위</div>
+          <div class="filter-row">
+            <input type="date" id="adDateStart" onchange="onSpecialDateInput('ad')">
+            <span class="date-sep">~</span>
+            <input type="date" id="adDateEnd" onchange="onSpecialDateInput('ad')">
+          </div>
+          <div class="preset-chips" id="ad-preset-chips">
+            <div class="preset-chip" data-preset="7d"  onclick="setSpecialPreset('ad',this)">최근 7일</div>
+            <div class="preset-chip" data-preset="30d" onclick="setSpecialPreset('ad',this)">최근 30일</div>
+            <div class="preset-chip" data-preset="mon" onclick="setSpecialPreset('ad',this)">이번 달</div>
+            <div class="preset-chip" data-preset="all" onclick="setSpecialPreset('ad',this)">전체</div>
+          </div>
+        </div>
+        <button class="filter-reset" onclick="resetSpecialFilter('ad')">필터 초기화</button>
+        <div class="filter-count" id="ad-filter-count"></div>
+      </div>
       <div class="kpi-grid" id="ad-kpi-grid"></div>
       <div class="section">
         <div class="section-title">
@@ -549,6 +585,65 @@ function renderSpecialTab(prefix, campaigns, recipients) {
   renderSpecialTable(prefix, campaigns);
   renderSpecialTrend(prefix, campaigns);
   renderSpecialLinkClicks(prefix, campaigns);
+}
+
+// ── 날짜 필터 헬퍼 ────────────────────────────────────────
+function getSpecialFiltered(prefix) {
+  const all = prefix==='ours' ? allOursCampaigns : allAdCampaigns;
+  const ds  = (document.getElementById(`${prefix}DateStart`)?.value)||'';
+  const de  = (document.getElementById(`${prefix}DateEnd`)?.value)||'';
+  if (!ds && !de) return all;
+  return all.filter(c => {
+    const d = String(c['발송일']||'');
+    if (ds && d < ds) return false;
+    if (de && d > de) return false;
+    return true;
+  });
+}
+
+function getSpecialFilteredRecipients(prefix, filteredCamps) {
+  const all = prefix==='ours' ? allOursRecipients : allAdRecipients;
+  const ids = new Set(filteredCamps.map(c=>c['캠페인ID']));
+  return all.filter(r => ids.has(r['캠페인ID']));
+}
+
+function applySpecialFilter(prefix) {
+  if (prefix==='ours') oursPage=1;
+  else                 adPage=1;
+  const filtered   = getSpecialFiltered(prefix);
+  const recipients = getSpecialFilteredRecipients(prefix, filtered);
+  const allLen     = (prefix==='ours' ? allOursCampaigns : allAdCampaigns).length;
+  const countEl    = document.getElementById(`${prefix}-filter-count`);
+  if (countEl) countEl.textContent = filtered.length < allLen ? `${filtered.length} / ${allLen}건` : '';
+  renderSpecialKPIs(prefix, filtered, recipients);
+  renderSpecialTable(prefix, filtered);
+  renderSpecialTrend(prefix, filtered);
+  renderSpecialLinkClicks(prefix, filtered);
+}
+
+function setSpecialPreset(prefix, el) {
+  const today=new Date(), fmt=d=>d.toISOString().slice(0,10), preset=el.dataset.preset;
+  document.querySelectorAll(`#${prefix}-preset-chips .preset-chip`).forEach(c=>c.classList.remove('active'));
+  el.classList.add('active');
+  const ds = document.getElementById(`${prefix}DateStart`);
+  const de = document.getElementById(`${prefix}DateEnd`);
+  if (preset==='7d')  { const s=new Date(today); s.setDate(today.getDate()-6); ds.value=fmt(s); de.value=fmt(today); }
+  else if (preset==='30d') { const s=new Date(today); s.setDate(today.getDate()-29); ds.value=fmt(s); de.value=fmt(today); }
+  else if (preset==='mon') { ds.value=fmt(new Date(today.getFullYear(),today.getMonth(),1)); de.value=fmt(today); }
+  else { ds.value=''; de.value=''; }
+  applySpecialFilter(prefix);
+}
+
+function onSpecialDateInput(prefix) {
+  document.querySelectorAll(`#${prefix}-preset-chips .preset-chip`).forEach(c=>c.classList.remove('active'));
+  applySpecialFilter(prefix);
+}
+
+function resetSpecialFilter(prefix) {
+  document.getElementById(`${prefix}DateStart`).value='';
+  document.getElementById(`${prefix}DateEnd`).value='';
+  document.querySelectorAll(`#${prefix}-preset-chips .preset-chip`).forEach(c=>c.classList.remove('active'));
+  applySpecialFilter(prefix);
 }
 
 function renderSpecialKPIs(prefix, campaigns, recipients) {
@@ -1818,8 +1913,8 @@ async function init() {
     detectCopyEls(allEmailList);
     campPage=1; replyPage=1; brandPage=1;
     buildFilterUI(campaigns); applyFilters(); renderTop5(); renderReplyList();
-    renderSpecialTab('ours', allOursCampaigns, allOursRecipients);
-    renderSpecialTab('ad',   allAdCampaigns,   allAdRecipients);
+    applySpecialFilter('ours');
+    applySpecialFilter('ad');
     buildBrandRecords(); renderBrandFilters(); applyBrandFilters();
     const now=new Date();
     document.getElementById('last-updated').textContent=`마지막 업데이트: ${now.toLocaleDateString('ko-KR')} ${now.toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'})}`;
