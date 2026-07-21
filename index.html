@@ -148,6 +148,8 @@ tr:hover td { background: #1a1d24; }
 
     <div class="tab-nav">
       <button class="tab-btn active" id="tab-btn-campaign" onclick="switchTab('campaign')">이메일 캠페인</button>
+      <button class="tab-btn" id="tab-btn-ours" onclick="switchTab('ours')">Ours</button>
+      <button class="tab-btn" id="tab-btn-ad" onclick="switchTab('ad')">광고</button>
       <button class="tab-btn" id="tab-btn-brand" onclick="switchTab('brand')">브랜드 분석</button>
     </div>
 
@@ -256,6 +258,56 @@ tr:hover td { background: #1a1d24; }
         <div class="note" style="margin-top:10px">셀 색상: <span style="color:#4ade80">■</span> 60%↑ &nbsp;<span style="color:#fbbf24">■</span> 35~60% &nbsp;<span style="color:#f87171">■</span> 35%↓ &nbsp;·&nbsp; n=2 흐리게 처리 &nbsp;·&nbsp; n=1 이하 – 처리</div>
       </div>
     </div><!-- /tab-campaign -->
+
+    <!-- ════ TAB: Ours ════ -->
+    <div id="tab-ours" style="display:none">
+      <div class="kpi-grid" id="ours-kpi-grid"></div>
+      <div class="section">
+        <div class="section-title">
+          캠페인 목록
+          <span class="section-subtitle" id="ours-count-label">–</span>
+        </div>
+        <div class="table-wrap">
+          <table><thead id="ours-table-head"></thead><tbody id="ours-table-body"></tbody></table>
+        </div>
+        <div id="ours-pagination" class="pagination-wrap"></div>
+      </div>
+      <div class="chart-grid">
+        <div class="section">
+          <div class="section-title">오픈율 · 클릭율 추이</div>
+          <div class="chart-container"><canvas id="oursTrendChart"></canvas></div>
+        </div>
+        <div class="section">
+          <div class="section-title">링크 클릭 상세</div>
+          <div id="ours-link-content"><div class="no-data">데이터 없음</div></div>
+        </div>
+      </div>
+    </div><!-- /tab-ours -->
+
+    <!-- ════ TAB: 광고 ════ -->
+    <div id="tab-ad" style="display:none">
+      <div class="kpi-grid" id="ad-kpi-grid"></div>
+      <div class="section">
+        <div class="section-title">
+          캠페인 목록
+          <span class="section-subtitle" id="ad-count-label">–</span>
+        </div>
+        <div class="table-wrap">
+          <table><thead id="ad-table-head"></thead><tbody id="ad-table-body"></tbody></table>
+        </div>
+        <div id="ad-pagination" class="pagination-wrap"></div>
+      </div>
+      <div class="chart-grid">
+        <div class="section">
+          <div class="section-title">오픈율 · 클릭율 추이</div>
+          <div class="chart-container"><canvas id="adTrendChart"></canvas></div>
+        </div>
+        <div class="section">
+          <div class="section-title">링크 클릭 상세</div>
+          <div id="ad-link-content"><div class="no-data">데이터 없음</div></div>
+        </div>
+      </div>
+    </div><!-- /tab-ad -->
 
     <!-- ════ TAB: 브랜드 분석 ════ -->
     <div id="tab-brand" style="display:none">
@@ -378,6 +430,12 @@ let campPage = 1, replyPage = 1;
 const PAGE_SIZE = 10;
 let filteredCampsCache = [];
 
+let allOursCampaigns = [], allAdCampaigns = [];
+let allOursRecipients = [], allAdRecipients = [];
+let oursPage = 1, adPage = 1;
+let oursSortState = { col: '발송일', dir: 'desc' };
+let adSortState   = { col: '발송일', dir: 'desc' };
+
 let allBrandRecords = [];
 let filteredBrandsCache = [];
 let filteredBrandRecordsCache = [];
@@ -478,7 +536,260 @@ function switchTab(tab) {
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
   document.getElementById(`tab-btn-${tab}`).classList.add('active');
   document.getElementById('tab-campaign').style.display = tab === 'campaign' ? 'block' : 'none';
-  document.getElementById('tab-brand').style.display   = tab === 'brand'    ? 'block' : 'none';
+  document.getElementById('tab-ours').style.display     = tab === 'ours'     ? 'block' : 'none';
+  document.getElementById('tab-ad').style.display       = tab === 'ad'       ? 'block' : 'none';
+  document.getElementById('tab-brand').style.display    = tab === 'brand'    ? 'block' : 'none';
+}
+
+// ═══════════════════════════════════════════════════
+// Ours / 광고 탭 — 공통 렌더
+// ═══════════════════════════════════════════════════
+function renderSpecialTab(prefix, campaigns, recipients) {
+  renderSpecialKPIs(prefix, campaigns, recipients);
+  renderSpecialTable(prefix, campaigns);
+  renderSpecialTrend(prefix, campaigns);
+  renderSpecialLinkClicks(prefix, campaigns);
+}
+
+function renderSpecialKPIs(prefix, campaigns, recipients) {
+  const el = document.getElementById(`${prefix}-kpi-grid`);
+  if (!el) return;
+  const totalSent   = campaigns.reduce((a,c)=>a+(parseInt(c['총 발송수'])||0),0);
+  const totalClicks = campaigns.reduce((a,c)=>a+(parseInt(c['클릭수'])||0),0);
+  const openRates   = campaigns.map(c=>pct(c['오픈율 (외부)'])).filter(v=>v!==null);
+  const avgOpen     = avg(openRates);
+  const clickRatesArr = campaigns
+    .filter(c=>parseInt(c['총 발송수'])>0)
+    .map(c=>+(parseInt(c['클릭수']||0)/parseInt(c['총 발송수'])*100).toFixed(1));
+  const avgClick = avg(clickRatesArr.length ? clickRatesArr : []);
+  const extRecip  = recipients.filter(r=>r['구분']==='외부');
+  const replyCount= extRecip.filter(r=>String(r['회신여부']).trim()==='Y').length;
+
+  const kpis = [
+    { label:'캠페인 수',   value: campaigns.length,                          sub: '건' },
+    { label:'총 발송수',   value: totalSent,                                 sub: '명' },
+    { label:'평균 오픈율', value: avgOpen!==null ? avgOpen.toFixed(1)+'%':'-', sub: '캠페인 기준' },
+    { label:'평균 클릭율', value: avgClick!==null? avgClick.toFixed(1)+'%':'-',sub: '캠페인 기준' },
+    { label:'총 클릭수',   value: totalClicks,                               sub: '회' },
+    { label:'회신 수',     value: replyCount,                                sub: '건' },
+  ];
+  el.innerHTML = kpis.map(k=>`
+    <div class="kpi-card">
+      <div class="kpi-label">${k.label}</div>
+      <div class="kpi-value ${kpiValueClass(String(k.value))}">${k.value}</div>
+      <div class="kpi-sub">${k.sub}</div>
+    </div>`).join('');
+}
+
+function renderSpecialTable(prefix, campaigns) {
+  const sState = prefix==='ours' ? oursSortState : adSortState;
+  const headEl = document.getElementById(`${prefix}-table-head`);
+  const bodyEl = document.getElementById(`${prefix}-table-body`);
+  const countEl= document.getElementById(`${prefix}-count-label`);
+  if (!headEl || !bodyEl) return;
+  if (countEl) countEl.textContent = `총 ${campaigns.length}건`;
+
+  const cols = [
+    { key:'캠페인ID',      label:'캠페인ID',  sort:false },
+    { key:'이메일 제목',   label:'제목',       sort:false },
+    { key:'발송일',        label:'발송일',     sort:true  },
+    { key:'총 발송수',     label:'발송수',     sort:true  },
+    { key:'오픈율 (외부)', label:'오픈율',     sort:true  },
+    { key:'클릭수',        label:'클릭수',     sort:true  },
+    { key:'발송시간대',    label:'시간대',     sort:false },
+  ];
+  headEl.innerHTML = '<tr>' + cols.map(c=>
+    c.sort
+      ? `<th class="sortable ${sState.col===c.key?'sort-'+sState.dir:''}" onclick="sortSpecial('${prefix}','${c.key}')">${c.label}</th>`
+      : `<th>${c.label}</th>`
+  ).join('') + '</tr>';
+
+  const page = prefix==='ours' ? oursPage : adPage;
+  const sorted = [...campaigns].sort((a,b)=>{
+    const k=sState.col, d=sState.dir==='asc'?1:-1;
+    if (k==='총 발송수'||k==='클릭수') return ((parseInt(a[k])||0)-(parseInt(b[k])||0))*d;
+    if (k==='오픈율 (외부)') return ((pct(a[k])||0)-(pct(b[k])||0))*d;
+    return (a[k]||'').localeCompare(b[k]||'')*d;
+  });
+  const paged = sorted.slice((page-1)*PAGE_SIZE, page*PAGE_SIZE);
+
+  bodyEl.innerHTML = paged.map(c=>{
+    const r=pct(c['오픈율 (외부)']);
+    return `<tr>
+      <td><span class="cid">${c['캠페인ID']||''}</span></td>
+      <td style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${(c['이메일 제목']||'').replace(/"/g,'&quot;')}">${c['이메일 제목']||'–'}</td>
+      <td style="white-space:nowrap;color:#aaa">${c['발송일']||'–'}</td>
+      <td style="text-align:right">${c['총 발송수']||'–'}</td>
+      <td class="${rateClass(r)}">${r!==null?r.toFixed(1)+'%':'–'}</td>
+      <td style="text-align:right;color:#aaa">${c['클릭수']||'0'}</td>
+      <td style="color:#aaa">${c['발송시간대']||'–'}</td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="7" class="no-data">데이터 없음</td></tr>';
+
+  // 페이지네이션
+  const pgEl = document.getElementById(`${prefix}-pagination`);
+  if (!pgEl) return;
+  const total = sorted.length, totalPages = Math.ceil(total/PAGE_SIZE);
+  if (totalPages<=1) { pgEl.innerHTML=''; return; }
+  let pg='';
+  pg+=`<button class="pg-btn" ${page<=1?'disabled':''} onclick="setSpecialPage('${prefix}',${page-1})">‹</button>`;
+  for(let p=1;p<=totalPages;p++) pg+=`<button class="pg-btn ${p===page?'pg-active':''}" onclick="setSpecialPage('${prefix}',${p})">${p}</button>`;
+  pg+=`<button class="pg-btn" ${page>=totalPages?'disabled':''} onclick="setSpecialPage('${prefix}',${page+1})">›</button>`;
+  pg+=`<span class="pg-info">${(page-1)*PAGE_SIZE+1}–${Math.min(page*PAGE_SIZE,total)} / ${total}건</span>`;
+  pgEl.innerHTML=pg;
+}
+
+function setSpecialPage(prefix, p) {
+  if (prefix==='ours') { oursPage=p; renderSpecialTable('ours', allOursCampaigns); }
+  else                 { adPage=p;   renderSpecialTable('ad',   allAdCampaigns);   }
+}
+function sortSpecial(prefix, col) {
+  const s = prefix==='ours' ? oursSortState : adSortState;
+  s.dir = s.col===col ? (s.dir==='asc'?'desc':'asc') : 'desc';
+  s.col = col;
+  if (prefix==='ours') { oursPage=1; renderSpecialTable('ours', allOursCampaigns); }
+  else                 { adPage=1;   renderSpecialTable('ad',   allAdCampaigns);   }
+}
+
+function renderSpecialTrend(prefix, campaigns) {
+  const chartId = `${prefix}TrendChart`;
+  destroyChart(chartId);
+  const el = document.getElementById(chartId);
+  if (!el || !campaigns.length) return;
+  const sorted = [...campaigns].sort((a,b)=>(a['발송일']||'').localeCompare(b['발송일']||''));
+  const labels    = sorted.map(c=>c['캠페인ID']||c['발송일']||'');
+  const openVals  = sorted.map(c=>pct(c['오픈율 (외부)']));
+  const clickVals = sorted.map(c=>{
+    const sent=parseInt(c['총 발송수'])||0, clicks=parseInt(c['클릭수'])||0;
+    return sent>0 ? +(clicks/sent*100).toFixed(1) : null;
+  });
+  charts[chartId] = new Chart(el, {
+    type:'line',
+    data:{ labels, datasets:[
+      { label:'오픈율',  data:openVals,  borderColor:'#ff6b00', backgroundColor:'#ff6b0033', tension:0.3, spanGaps:true, pointRadius:5 },
+      { label:'클릭율',  data:clickVals, borderColor:'#4ade80', backgroundColor:'#4ade8033', tension:0.3, spanGaps:true, pointRadius:5 },
+    ]},
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      scales:{
+        y:{ beginAtZero:true, max:110, grid:{color:GRID}, ticks:{...AXIS,callback:v=>v+'%'} },
+        x:{ grid:{display:false}, ticks:{color:'#aaa',font:{size:11}} }
+      },
+      plugins:{ legend:{labels:{color:'#aaa'}}, tooltip:{callbacks:{label:ctx=>ctx.parsed.y!==null?` ${ctx.dataset.label}: ${ctx.parsed.y}%`:' 데이터 없음'}} }
+    }
+  });
+}
+
+// ═══════════════════════════════════════════════════
+// 링크 클릭 상세 (Ours / 광고 탭 공통)
+// ═══════════════════════════════════════════════════
+
+// 캠페인요약 P~U열 헤더 후보 (여러 네이밍 패턴 순서대로 시도)
+const LINK_KEY_PATTERNS = [
+  ['링크1URL','링크1클릭수','링크2URL','링크2클릭수','링크3URL','링크3클릭수'],
+  ['링크1 URL','링크1 클릭수','링크2 URL','링크2 클릭수','링크3 URL','링크3 클릭수'],
+  ['URL1','클릭수1','URL2','클릭수2','URL3','클릭수3'],
+  ['클릭링크1','클릭수1','클릭링크2','클릭수2','클릭링크3','클릭수3'],
+  ['링크1','클릭1','링크2','클릭2','링크3','클릭3'],
+];
+
+// 알려진 열 — fallback 스캔 시 이 열은 URL로 취급 안 함
+const _KNOWN_CAMP_KEYS = new Set([
+  '캠페인ID','발송일','카테고리','이메일 제목','발송시간대',
+  '총 발송수','오픈수 (전체)','오픈율 (전체)','오픈수 (외부)','오픈율 (외부)',
+  '클릭수','클릭율','총 오픈횟수','평균 오픈/인','비고'
+]);
+
+function getCampLinks(campaign) {
+  // 1) 알려진 패턴으로 시도
+  for (const p of LINK_KEY_PATTERNS) {
+    const v0 = String(campaign[p[0]]||'').trim();
+    if (v0) {
+      const links = [];
+      for (let i=0; i<3; i++) {
+        const u = String(campaign[p[i*2]]  ||'').trim();
+        const c = parseInt(campaign[p[i*2+1]])||0;
+        if (u) links.push({ url:u, clicks:c });
+      }
+      if (links.length) return links;
+    }
+  }
+  // 2) fallback: 알려진 열 외의 키에서 URL-like 값 탐지
+  const extras = Object.entries(campaign).filter(([k])=>!_KNOWN_CAMP_KEYS.has(k));
+  const links = [];
+  for (let i=0; i<extras.length-1; i++) {
+    const v = String(extras[i][1]||'').trim();
+    if (v && (v.includes('/') || v.toLowerCase().startsWith('http'))) {
+      links.push({ url:v, clicks: parseInt(extras[i+1][1])||0 });
+      i++;
+    }
+  }
+  return links;
+}
+
+function renderSpecialLinkClicks(prefix, campaigns) {
+  const el = document.getElementById(`${prefix}-link-content`);
+  if (!el) return;
+
+  // 캠페인별 링크 데이터 수집
+  const campLinks = [];
+  const urlTotals = {};
+
+  for (const c of campaigns) {
+    const links = getCampLinks(c);
+    if (!links.length) continue;
+    campLinks.push({ id: c['캠페인ID']||'', date: c['발송일']||'', links });
+    for (const {url, clicks} of links) {
+      urlTotals[url] = (urlTotals[url]||0) + clicks;
+    }
+  }
+
+  if (!Object.keys(urlTotals).length) {
+    el.innerHTML = '<div class="no-data" style="padding:20px">링크 클릭 데이터 없음<br><span style="font-size:11px;color:#444;margin-top:6px;display:block">appendCampaignData() 실행 후 표시됩니다</span></div>';
+    return;
+  }
+
+  // 전체 집계 — 클릭수 내림차순
+  const sorted = Object.entries(urlTotals).sort((a,b)=>b[1]-a[1]);
+  const totalClicks = sorted.reduce((s,[,c])=>s+c, 0);
+
+  let html = `<div style="margin-bottom:${campLinks.length>1?'20':'0'}px">`;
+  html += `<div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px">전체 집계 · 총 ${totalClicks}클릭</div>`;
+  html += sorted.map(([url, clicks], i) => {
+    const display = url.replace(/^https?:\/\//,'');
+    const maxC = sorted[0][1] || 1;
+    const barW  = Math.max(4, Math.round(clicks/maxC*100));
+    const medal = i===0?'top1':i===1?'top2':i===2?'top3':'';
+    return `<div class="rank-row">
+      <div class="rank-num ${medal}">${i+1}</div>
+      <div class="rank-name" title="${url}">${display}</div>
+      <div style="width:60px;height:4px;background:#2a2d35;border-radius:2px;flex-shrink:0;margin:0 8px">
+        <div style="width:${barW}%;height:100%;background:#ff6b00;border-radius:2px"></div>
+      </div>
+      <div class="rank-value">${clicks}회</div>
+    </div>`;
+  }).join('');
+  html += '</div>';
+
+  // 캠페인이 2개 이상이면 캠페인별 상세도 표시
+  if (campLinks.length > 1) {
+    html += `<div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">캠페인별 상세</div>`;
+    html += '<div class="table-wrap"><table><thead><tr><th>캠페인</th><th>발송일</th><th>URL</th><th style="text-align:right">클릭</th></tr></thead><tbody>';
+    for (const {id, date, links} of campLinks) {
+      for (const {url, clicks} of links) {
+        const display = url.replace(/^https?:\/\//,'');
+        html += `<tr>
+          <td><span class="cid">${id}</span></td>
+          <td style="color:#aaa;white-space:nowrap">${date}</td>
+          <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;color:#aaa" title="${url}">${display}</td>
+          <td style="text-align:right;color:#ff6b00;font-weight:700">${clicks}</td>
+        </tr>`;
+      }
+    }
+    html += '</tbody></table></div>';
+  }
+
+  el.innerHTML = html;
 }
 
 // ═══════════════════════════════════════════════════
@@ -1491,14 +1802,24 @@ async function init() {
   try {
     const [campaigns,emailList,recipients]=await Promise.all([fetchSheet('캠페인요약'),fetchSheet('발송이메일목록'),fetchSheet('수신자마스터')]);
     if(!campaigns.length) throw new Error('캠페인요약 탭에 데이터가 없습니다.');
-    // "광고" 키워드가 제목에 포함된 캠페인 제외
-    const adIds=new Set(campaigns.filter(c=>{const t=String(c['이메일 제목']||'').toLowerCase(); return t.includes('광고')||t.includes('ours');}).map(c=>c['캠페인ID']));
-    allCampaigns=campaigns.filter(c=>!adIds.has(c['캠페인ID']));
-    allEmailList=emailList.filter(r=>!adIds.has(r['캠페인ID']));
-    allRecipients=recipients.filter(r=>!adIds.has(r['캠페인ID']));
+    // 캠페인 유형 분류 (일반 / Ours / 광고)
+    const _isOurs = c => String(c['이메일 제목']||'').toLowerCase().includes('ours');
+    const _isAd   = c => String(c['이메일 제목']||'').includes('광고');
+    const _oursIds = new Set(campaigns.filter(_isOurs).map(c=>c['캠페인ID']));
+    const _adIds   = new Set(campaigns.filter(_isAd).map(c=>c['캠페인ID']));
+    const _specialIds = new Set([..._oursIds, ..._adIds]);
+    allCampaigns      = campaigns.filter(c => !_specialIds.has(c['캠페인ID']));
+    allOursCampaigns  = campaigns.filter(c => _oursIds.has(c['캠페인ID']));
+    allAdCampaigns    = campaigns.filter(c => _adIds.has(c['캠페인ID']));
+    allEmailList      = emailList.filter(r => !_specialIds.has(r['캠페인ID']));
+    allRecipients     = recipients.filter(r => !_specialIds.has(r['캠페인ID']));
+    allOursRecipients = recipients.filter(r => _oursIds.has(r['캠페인ID']));
+    allAdRecipients   = recipients.filter(r => _adIds.has(r['캠페인ID']));
     detectCopyEls(allEmailList);
     campPage=1; replyPage=1; brandPage=1;
     buildFilterUI(campaigns); applyFilters(); renderTop5(); renderReplyList();
+    renderSpecialTab('ours', allOursCampaigns, allOursRecipients);
+    renderSpecialTab('ad',   allAdCampaigns,   allAdRecipients);
     buildBrandRecords(); renderBrandFilters(); applyBrandFilters();
     const now=new Date();
     document.getElementById('last-updated').textContent=`마지막 업데이트: ${now.toLocaleDateString('ko-KR')} ${now.toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'})}`;
