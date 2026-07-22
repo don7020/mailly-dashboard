@@ -486,7 +486,7 @@ let brandSortState = { col: 'openRate', dir: 'desc' };
 // 발송이메일목록에서 값이 Y/N으로만 구성된 컬럼을 찾아 COPY_ELS 세팅
 const _COPY_NON_COLS = new Set([
   '캠페인ID','발송일','발송일시','카테고리','이메일 제목','비고','구분',
-  '오픈율 (외부)','클릭수','수신자수','발송횟수','발송수','수신자','브랜드명',
+  '오픈율 (외부)','오픈율 (전체)','오픈율','클릭율','클릭수','수신자수','발송횟수','발송수','수신자','브랜드명',
   '브랜드','오픈여부','클릭여부','회신여부','발송시간대','요일','시간대','시간','날짜',
 ]);
 function detectCopyEls(rows) {
@@ -689,8 +689,8 @@ function renderSpecialTable(prefix, campaigns) {
     { key:'이메일 제목',   label:'제목',       sort:false },
     { key:'발송일',        label:'발송일',     sort:true  },
     { key:'총 발송수',     label:'발송수',     sort:true  },
-    { key:'오픈율 (외부)', label:'오픈율',     sort:true  },
-    { key:'클릭수',        label:'클릭수',     sort:true  },
+    { key:'오픈율 (외부)', label:'오픈율<span style="font-size:10px;color:#444;font-weight:400;display:block">전체↑ 외부↑</span>', sort:true },
+    { key:'클릭율',        label:'클릭율<span style="font-size:10px;color:#444;font-weight:400;display:block">전체↑ 외부↑</span>', sort:true },
     { key:'발송시간대',    label:'시간대',     sort:false },
   ];
   headEl.innerHTML = '<tr>' + cols.map(c=>
@@ -702,21 +702,29 @@ function renderSpecialTable(prefix, campaigns) {
   const page = prefix==='ours' ? oursPage : adPage;
   const sorted = [...campaigns].sort((a,b)=>{
     const k=sState.col, d=sState.dir==='asc'?1:-1;
-    if (k==='총 발송수'||k==='클릭수') return ((parseInt(a[k])||0)-(parseInt(b[k])||0))*d;
-    if (k==='오픈율 (외부)') return ((pct(a[k])||0)-(pct(b[k])||0))*d;
+    if (k==='총 발송수') return ((parseInt(a[k])||0)-(parseInt(b[k])||0))*d;
+    if (k==='오픈율 (외부)'||k==='클릭율') return ((pct(a[k])||0)-(pct(b[k])||0))*d;
     return (a[k]||'').localeCompare(b[k]||'')*d;
   });
   const paged = sorted.slice((page-1)*PAGE_SIZE, page*PAGE_SIZE);
 
   bodyEl.innerHTML = paged.map(c=>{
-    const r=pct(c['오픈율 (외부)']);
+    const totOr=pct(c['오픈율 (전체)']), extOr=pct(c['오픈율 (외부)']);
+    const totSnt=parseInt(c['총 발송수'])||0, totClk=parseInt(c['클릭수'])||0;
+    const totCr=totSnt>0?+(totClk/totSnt*100).toFixed(1):null, extCr=pct(c['클릭율']);
     return `<tr>
       <td><span class="cid">${c['캠페인ID']||''}</span></td>
-      <td style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${(c['이메일 제목']||'').replace(/"/g,'&quot;')}">${c['이메일 제목']||'–'}</td>
+      <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${(c['이메일 제목']||'').replace(/"/g,'&quot;')}">${c['이메일 제목']||'–'}</td>
       <td style="white-space:nowrap;color:#aaa">${c['발송일']||'–'}</td>
       <td style="text-align:right">${c['총 발송수']||'–'}</td>
-      <td class="${rateClass(r)}">${r!==null?r.toFixed(1)+'%':'–'}</td>
-      <td style="text-align:right;color:#aaa">${c['클릭수']||'0'}</td>
+      <td>
+        <div class="${rateClass(totOr)}" style="font-size:12px">${totOr!==null?totOr.toFixed(1)+'%':'–'}</div>
+        <div style="font-size:11px;margin-top:2px;color:#555">외부 <span class="${rateClass(extOr)}">${extOr!==null?extOr.toFixed(1)+'%':'–'}</span></div>
+      </td>
+      <td>
+        <div style="font-size:12px;color:#ccc">${totCr!==null?totCr.toFixed(1)+'%':'–'}</div>
+        <div style="font-size:11px;margin-top:2px;color:#555">외부 <span class="${rateClass(extCr)}">${extCr!==null?extCr.toFixed(1)+'%':'–'}</span></div>
+      </td>
       <td style="color:#aaa">${c['발송시간대']||'–'}</td>
     </tr>`;
   }).join('') || '<tr><td colspan="7" class="no-data">데이터 없음</td></tr>';
@@ -1069,19 +1077,30 @@ function renderTable(campaigns) {
   const cols=[
     {key:null,label:'ID'},{key:'발송일',label:'발송일'},{key:null,label:'카테고리'},
     {key:null,label:'이메일 제목'},{key:'총 발송수',label:'발송수'},
-    {key:'오픈율 (외부)',label:'오픈율',sort:true},{key:'클릭수',label:'클릭수',sort:true},{key:null,label:'비고'},
+    {key:'오픈율 (외부)',label:'오픈율<span style="font-size:10px;color:#444;font-weight:400;display:block">전체↑ 외부↑</span>',sort:true},
+    {key:'클릭율',label:'클릭율<span style="font-size:10px;color:#444;font-weight:400;display:block">전체↑ 외부↑</span>',sort:true},
+    {key:null,label:'비고'},
   ];
   const head='<tr>'+cols.map(col=>{ if(!col.sort)return `<th>${col.label}</th>`; const cls=sortState.col===col.key?`sort-${sortState.dir}`:''; return `<th class="sortable ${cls}" onclick="sortBy('${col.key}')">${col.label}</th>`; }).join('')+'</tr>';
   const rows=pageItems.map(c=>{
-    const cat=c['카테고리']||'', extR=pct(c['오픈율 (외부)']), subj=c['이메일 제목']||'', note=c['비고']||'';
+    const cat=c['카테고리']||'', subj=c['이메일 제목']||'', note=c['비고']||'';
+    const totOr=pct(c['오픈율 (전체)']), extOr=pct(c['오픈율 (외부)']);
+    const totSnt=parseInt(c['총 발송수'])||0, totClk=parseInt(c['클릭수'])||0;
+    const totCr=totSnt>0?+(totClk/totSnt*100).toFixed(1):null, extCr=pct(c['클릭율']);
     return `<tr>
       <td><span class="cid">${c['캠페인ID']}</span></td>
       <td style="white-space:nowrap">${c['발송일']}</td>
       <td><span class="badge ${cat?'badge-cat':'badge-empty'}">${cat||'미입력'}</span></td>
       <td style="font-size:12px;color:#888;max-width:200px" title="${subj}">${subj.length>36?subj.slice(0,36)+'…':subj}</td>
       <td style="text-align:right">${c['총 발송수']}</td>
-      <td class="${rateClass(extR)}">${extR!==null?extR.toFixed(1)+'%':'-'}</td>
-      <td style="text-align:right">${c['클릭수']||'0'}</td>
+      <td>
+        <div class="${rateClass(totOr)}" style="font-size:12px">${totOr!==null?totOr.toFixed(1)+'%':'–'}</div>
+        <div style="font-size:11px;margin-top:2px;color:#555">외부 <span class="${rateClass(extOr)}">${extOr!==null?extOr.toFixed(1)+'%':'–'}</span></div>
+      </td>
+      <td>
+        <div style="font-size:12px;color:#ccc">${totCr!==null?totCr.toFixed(1)+'%':'–'}</div>
+        <div style="font-size:11px;margin-top:2px;color:#555">외부 <span class="${rateClass(extCr)}">${extCr!==null?extCr.toFixed(1)+'%':'–'}</span></div>
+      </td>
       <td style="font-size:11px;color:#555" title="${note}">${note.length>26?note.slice(0,26)+'…':note}</td>
     </tr>`;
   }).join('');
