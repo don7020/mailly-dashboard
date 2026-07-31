@@ -518,6 +518,10 @@ function pct(v) {
   if (!String(v).includes('%') && n >= 0 && n <= 1) return +(n*100).toFixed(1);
   return +n.toFixed(1);
 }
+// 캠페인 오픈율: 외부 있으면 외부, 없으면 전체로 폴백
+function openRate(c)    { const e=pct(c['오픈율 (외부)']); return e!==null?e:pct(c['오픈율 (전체)']); }
+// 발송이메일목록/수신자 행 오픈율: 동일 폴백 로직
+function openRateRow(r) { const e=pct(r['오픈율 (외부)']); return e!==null?e:pct(r['오픈율 (전체)']); }
 function rateClass(v) { return v === null ? '' : v >= 60 ? 'rate-high' : v >= 35 ? 'rate-mid' : 'rate-low'; }
 function avg(arr) { const f = arr.filter(v => v !== null); return f.length ? f.reduce((a,b)=>a+b,0)/f.length : null; }
 function destroyChart(id) { if (charts[id]) { charts[id].destroy(); delete charts[id]; } }
@@ -649,29 +653,32 @@ function resetSpecialFilter(prefix) {
 function renderSpecialKPIs(prefix, campaigns, recipients) {
   const el = document.getElementById(`${prefix}-kpi-grid`);
   if (!el) return;
-  const totalSent   = campaigns.reduce((a,c)=>a+(parseInt(c['총 발송수'])||0),0);
-  const totalClicks = campaigns.reduce((a,c)=>a+(parseInt(c['클릭수'])||0),0);
-  const openRates   = campaigns.map(c=>pct(c['오픈율 (외부)'])).filter(v=>v!==null);
-  const avgOpen     = avg(openRates);
-  const clickRatesArr = campaigns
-    .filter(c=>parseInt(c['총 발송수'])>0)
+  const totalSent    = campaigns.reduce((a,c)=>a+(parseInt(c['총 발송수'])||0),0);
+  const totalClicks  = campaigns.reduce((a,c)=>a+(parseInt(c['클릭수'])||0),0);
+  const extOpenRates = campaigns.map(c=>pct(c['오픈율 (외부)'])).filter(v=>v!==null);
+  const totOpenRates = campaigns.map(c=>pct(c['오픈율 (전체)'])).filter(v=>v!==null);
+  const avgExtOpen   = avg(extOpenRates);
+  const avgTotOpen   = avg(totOpenRates);
+  const extClickRates= campaigns.map(c=>pct(c['클릭율'])).filter(v=>v!==null);
+  const avgExtClick  = avg(extClickRates);
+  const totClickRates= campaigns.filter(c=>parseInt(c['총 발송수'])>0)
     .map(c=>+(parseInt(c['클릭수']||0)/parseInt(c['총 발송수'])*100).toFixed(1));
-  const avgClick = avg(clickRatesArr.length ? clickRatesArr : []);
-  const extRecip  = recipients.filter(r=>r['구분']==='외부');
-  const replyCount= extRecip.filter(r=>String(r['회신여부']).trim()==='Y').length;
-
+  const avgTotClick  = avg(totClickRates.length?totClickRates:[]);
+  const extRecip     = recipients.filter(r=>r['구분']==='외부');
+  const replyCount   = extRecip.filter(r=>String(r['회신여부']).trim()==='Y').length;
+  const dr=(tot,ext)=>`<div>${tot!==null?tot.toFixed(1)+'%':'-'}</div><div style="font-size:13px;color:#aaa;margin-top:2px">외부 <span class="${rateClass(ext)}">${ext!==null?ext.toFixed(1)+'%':'-'}</span></div>`;
   const kpis = [
-    { label:'캠페인 수',   value: campaigns.length,                          sub: '건' },
-    { label:'총 발송수',   value: totalSent,                                 sub: '명' },
-    { label:'평균 오픈율', value: avgOpen!==null ? avgOpen.toFixed(1)+'%':'-', sub: '캠페인 기준' },
-    { label:'평균 클릭율', value: avgClick!==null? avgClick.toFixed(1)+'%':'-',sub: '캠페인 기준' },
-    { label:'총 클릭수',   value: totalClicks,                               sub: '회' },
-    { label:'회신 수',     value: replyCount,                                sub: '건' },
+    { label:'캠페인 수',   html: campaigns.length, raw: String(campaigns.length), sub: '건' },
+    { label:'총 발송수',   html: totalSent,         raw: String(totalSent),        sub: '명' },
+    { label:'평균 오픈율', html: dr(avgTotOpen,avgExtOpen),   raw: avgTotOpen!==null?avgTotOpen.toFixed(1)+'%':'-',   sub: '전체 ↑ 외부 ↑' },
+    { label:'평균 클릭율', html: dr(avgTotClick,avgExtClick), raw: avgTotClick!==null?avgTotClick.toFixed(1)+'%':'-', sub: '전체 ↑ 외부 ↑' },
+    { label:'총 클릭수',   html: totalClicks,       raw: String(totalClicks),      sub: '회' },
+    { label:'회신 수',     html: replyCount,        raw: String(replyCount),       sub: '건' },
   ];
   el.innerHTML = kpis.map(k=>`
     <div class="kpi-card">
       <div class="kpi-label">${k.label}</div>
-      <div class="kpi-value ${kpiValueClass(String(k.value))}">${k.value}</div>
+      <div class="kpi-value ${kpiValueClass(k.raw)}">${k.html}</div>
       <div class="kpi-sub">${k.sub}</div>
     </div>`).join('');
 }
@@ -966,27 +973,38 @@ function applyFilters() {
 // KPI — 이메일 캠페인
 // ═══════════════════════════════════════════════════
 function renderKPIs(campaigns) {
-  const extRates=campaigns.map(c=>pct(c['오픈율 (외부)'])).filter(v=>v!==null);
-  const totalSent=campaigns.reduce((a,c)=>a+(parseInt(c['총 발송수'])||0),0);
+  const extRates  = campaigns.map(c=>pct(c['오픈율 (외부)'])).filter(v=>v!==null);
+  const totRates  = campaigns.map(c=>pct(c['오픈율 (전체)'])).filter(v=>v!==null);
+  const totalSent = campaigns.reduce((a,c)=>a+(parseInt(c['총 발송수'])||0),0);
   const totalClicks=campaigns.reduce((a,c)=>a+(parseInt(c['클릭수'])||0),0);
-  const avgExt=avg(extRates);
-  const best=campaigns.reduce((a,c)=>{ const v=pct(c['오픈율 (외부)']); return (v!==null&&(a===null||v>pct(a['오픈율 (외부)'])))?c:a; },null);
+  const avgExt = avg(extRates);
+  const avgTot = avg(totRates);
+  const extClickRates = campaigns.map(c=>pct(c['클릭율'])).filter(v=>v!==null);
+  const avgExtClick   = avg(extClickRates);
+  const totClickRates = campaigns.filter(c=>parseInt(c['총 발송수'])>0)
+    .map(c=>+(parseInt(c['클릭수']||0)/parseInt(c['총 발송수'])*100).toFixed(1));
+  const avgTotClick = avg(totClickRates.length?totClickRates:[]);
+  const best=campaigns.reduce((a,c)=>{ const v=openRate(c); return (v!==null&&(a===null||v>openRate(a)))?c:a; },null);
   const sevenDaysAgo=new Date(Date.now()-7*24*60*60*1000).toISOString().slice(0,10);
-  const recentCamps=campaigns.filter(c=>c['발송일']>=sevenDaysAgo);
-  const recentAvg=avg(recentCamps.map(c=>pct(c['오픈율 (외부)'])).filter(v=>v!==null));
+  const recentCamps =campaigns.filter(c=>c['발송일']>=sevenDaysAgo);
+  const recentAvgExt=avg(recentCamps.map(c=>openRate(c)).filter(v=>v!==null));
+  const recentAvgTot=avg(recentCamps.map(c=>pct(c['오픈율 (전체)'])).filter(v=>v!==null));
   const filteredIds=new Set(campaigns.map(c=>c['캠페인ID']));
   const extRecip=allRecipients.filter(r=>filteredIds.has(r['캠페인ID'])&&r['구분']==='외부');
   const replyCount=extRecip.filter(r=>String(r['회신여부']).trim()==='Y').length;
   const replyRate=extRecip.length>0?(replyCount/extRecip.length*100).toFixed(1):null;
-  document.getElementById('kpi-grid').innerHTML=[
-    {label:'캠페인',value:campaigns.length,sub:'건'},
-    {label:'총 발송',value:totalSent,sub:'명'},
-    {label:'평균 오픈율',value:avgExt!==null?avgExt.toFixed(1)+'%':'-',sub:'외부 기준'},
-    {label:'최근 7일 오픈율',value:recentAvg!==null?recentAvg.toFixed(1)+'%':'-',sub:recentCamps.length?`${recentCamps.length}개 캠페인`:'캠페인 없음'},
-    {label:'최고 오픈율',value:best?pct(best['오픈율 (외부)']).toFixed(1)+'%':'-',sub:best?best['캠페인ID']:''},
-    {label:'회신율',value:replyRate!==null?replyRate+'%':'-',sub:`${replyCount}건 / ${extRecip.length}명`},
-    {label:'총 클릭수',value:totalClicks,sub:'회'},
-  ].map(k=>`<div class="kpi-card"><div class="kpi-label">${k.label}</div><div class="kpi-value ${kpiValueClass(k.value)}">${k.value}</div><div class="kpi-sub">${k.sub}</div></div>`).join('');
+  const dr=(tot,ext)=>`<div>${tot!==null?tot.toFixed(1)+'%':'-'}</div><div style="font-size:13px;color:#aaa;margin-top:2px">외부 <span class="${rateClass(ext)}">${ext!==null?ext.toFixed(1)+'%':'-'}</span></div>`;
+  const kpis=[
+    {label:'캠페인',       html:campaigns.length, raw:String(campaigns.length), sub:'건'},
+    {label:'총 발송',      html:totalSent,         raw:String(totalSent),        sub:'명'},
+    {label:'평균 오픈율',  html:dr(avgTot,avgExt), raw:avgTot!==null?avgTot.toFixed(1)+'%':'-', sub:'전체 ↑ 외부 ↑'},
+    {label:'최근 7일 오픈율', html:dr(recentAvgTot,recentAvgExt), raw:recentAvgTot!==null?recentAvgTot.toFixed(1)+'%':'-', sub:recentCamps.length?`${recentCamps.length}개 캠페인`:'캠페인 없음'},
+    {label:'최고 오픈율',  html:best?openRate(best).toFixed(1)+'%':'-', raw:best?openRate(best).toFixed(1)+'%':'-', sub:best?best['캠페인ID']:''},
+    {label:'평균 클릭율',  html:dr(avgTotClick,avgExtClick), raw:avgTotClick!==null?avgTotClick.toFixed(1)+'%':'-', sub:'전체 ↑ 외부 ↑'},
+    {label:'회신율',       html:replyRate!==null?replyRate+'%':'-', raw:replyRate!==null?replyRate+'%':'-', sub:`${replyCount}건 / ${extRecip.length}명`},
+    {label:'총 클릭수',    html:totalClicks, raw:String(totalClicks), sub:'회'},
+  ];
+  document.getElementById('kpi-grid').innerHTML=kpis.map(k=>`<div class="kpi-card"><div class="kpi-label">${k.label}</div><div class="kpi-value ${kpiValueClass(k.raw)}">${k.html}</div><div class="kpi-sub">${k.sub}</div></div>`).join('');
 }
 
 // ═══════════════════════════════════════════════════
@@ -997,8 +1015,14 @@ function renderBrandKPIs(brands, records) {
   const totalSent=brands.reduce((a,b)=>a+b.sent,0);
   const openRates=brands.filter(b=>b.openRate!==null).map(b=>b.openRate);
   const clickRates=brands.filter(b=>b.clickRate!==null).map(b=>b.clickRate);
-  const avgOpen=openRates.length?(openRates.reduce((a,b)=>a+b,0)/openRates.length).toFixed(1):null;
-  const avgClick=clickRates.length?(clickRates.reduce((a,b)=>a+b,0)/clickRates.length).toFixed(1):null;
+  const avgOpen =openRates.length? openRates.reduce((a,b)=>a+b,0)/openRates.length :null;
+  const avgClick=clickRates.length?clickRates.reduce((a,b)=>a+b,0)/clickRates.length:null;
+  // 전체 캠페인 기준 (비교용)
+  const campTotOpens =allCampaigns.map(c=>pct(c['오픈율 (전체)'])).filter(v=>v!==null);
+  const campTotClicks=allCampaigns.filter(c=>parseInt(c['총 발송수'])>0)
+    .map(c=>+(parseInt(c['클릭수']||0)/parseInt(c['총 발송수'])*100).toFixed(1));
+  const avgCampOpen =campTotOpens.length? campTotOpens.reduce((a,b)=>a+b,0)/campTotOpens.length :null;
+  const avgCampClick=campTotClicks.length?campTotClicks.reduce((a,b)=>a+b,0)/campTotClicks.length:null;
   const totalReplied=records.filter(r=>r.replied).length;
   const replyRate=records.length>0?(totalReplied/records.length*100).toFixed(1):null;
 
@@ -1023,18 +1047,19 @@ function renderBrandKPIs(brands, records) {
 
   const unopenedCount=brands.filter(b=>b.opened===0&&b.sent>0).length;
 
+  const dr=(tot,ext)=>`<div>${tot!==null?tot.toFixed(1)+'%':'-'}</div><div style="font-size:13px;color:#aaa;margin-top:2px">브랜드 <span class="${rateClass(ext)}">${ext!==null?ext.toFixed(1)+'%':'-'}</span></div>`;
   const kpis=[
-    {label:'브랜드 수',     value:brands.length,                             sub:'개'},
-    {label:'총 발송 건수',  value:totalSent,                                  sub:'건'},
-    {label:'평균 오픈율',   value:avgOpen!==null?avgOpen+'%':'-',             sub:'브랜드 기준'},
-    {label:'평균 클릭율',   value:avgClick!==null?avgClick+'%':'-',           sub:'브랜드 기준'},
-    {label:'회신율',        value:replyRate!==null?replyRate+'%':'-',         sub:`${totalReplied}건`},
-    {label:'최적 요일',     value:bestDay,                                    sub:'오픈율 기준'},
-    {label:'발송 시간대',   value:bestTime,                                   sub:'오픈율 기준'},
-    {label:'최적 카피요소', value:bestCopy,                                   sub:'오픈율 기준'},
-    {label:'미오픈 브랜드', value:unopenedCount,                              sub:'한 번도 안 열림'},
+    {label:'브랜드 수',     html:brands.length,    raw:String(brands.length),   sub:'개'},
+    {label:'총 발송 건수',  html:totalSent,         raw:String(totalSent),        sub:'건'},
+    {label:'평균 오픈율',   html:dr(avgCampOpen,avgOpen),   raw:avgOpen!==null?avgOpen.toFixed(1)+'%':'-',   sub:'전체캠 ↑ 브랜드 ↑'},
+    {label:'평균 클릭율',   html:dr(avgCampClick,avgClick), raw:avgClick!==null?avgClick.toFixed(1)+'%':'-', sub:'전체캠 ↑ 브랜드 ↑'},
+    {label:'회신율',        html:replyRate!==null?replyRate+'%':'-', raw:replyRate!==null?replyRate+'%':'-', sub:`${totalReplied}건`},
+    {label:'최적 요일',     html:bestDay,  raw:bestDay,  sub:'오픈율 기준'},
+    {label:'발송 시간대',   html:bestTime, raw:bestTime, sub:'오픈율 기준'},
+    {label:'최적 카피요소', html:bestCopy, raw:bestCopy, sub:'오픈율 기준'},
+    {label:'미오픈 브랜드', html:unopenedCount, raw:String(unopenedCount), sub:'한 번도 안 열림'},
   ];
-  el.innerHTML=kpis.map(k=>`<div class="kpi-card"><div class="kpi-label">${k.label}</div><div class="kpi-value ${kpiValueClass(k.value)}">${k.value}</div><div class="kpi-sub">${k.sub}</div></div>`).join('');
+  el.innerHTML=kpis.map(k=>`<div class="kpi-card"><div class="kpi-label">${k.label}</div><div class="kpi-value ${kpiValueClass(k.raw)}">${k.html}</div><div class="kpi-sub">${k.sub}</div></div>`).join('');
 }
 
 // ═══════════════════════════════════════════════════
@@ -1174,7 +1199,7 @@ function renderTrendChart(campaigns) {
   if(!sorted.length) return;
   charts['trendChart']=new Chart(document.getElementById('trendChart'),{
     type:'line',
-    data:{labels:sorted.map(c=>`${c['캠페인ID']}\n(${c['발송일'].slice(5)})`),datasets:[{label:'외부 오픈율',data:sorted.map(c=>pct(c['오픈율 (외부)'])),borderColor:'#ff6b00',backgroundColor:'rgba(255,107,0,0.08)',borderWidth:2.5,pointRadius:5,pointBackgroundColor:'#ff6b00',tension:0.3,fill:true}]},
+    data:{labels:sorted.map(c=>`${c['캠페인ID']}\n(${c['발송일'].slice(5)})`),datasets:[{label:'오픈율 (외부→전체 폴백)',data:sorted.map(c=>openRate(c)),borderColor:'#ff6b00',backgroundColor:'rgba(255,107,0,0.08)',borderWidth:2.5,pointRadius:5,pointBackgroundColor:'#ff6b00',tension:0.3,fill:true}]},
     options:{responsive:true,maintainAspectRatio:false,scales:{y:{beginAtZero:true,max:110,grid:{color:GRID},ticks:{...AXIS,callback:v=>v+'%'}},x:{grid:{color:GRID},ticks:{...AXIS}}},plugins:{legend:{labels:{color:'#888',font:{size:12}}},tooltip:{callbacks:{label:ctx=>` 외부 오픈율: ${ctx.parsed.y?.toFixed(1)}%`}}}}
   });
 }
@@ -1185,7 +1210,7 @@ function renderTrendChart(campaigns) {
 function renderTimeChart(campaigns) {
   destroyChart('timeChart');
   const map={};
-  campaigns.forEach(c=>{ const t=c['발송시간대']||'기타', r=pct(c['오픈율 (외부)']); if(r===null)return; if(!map[t])map[t]={sum:0,cnt:0}; map[t].sum+=r; map[t].cnt++; });
+  campaigns.forEach(c=>{ const t=c['발송시간대']||'기타', r=openRate(c); if(r===null)return; if(!map[t])map[t]={sum:0,cnt:0}; map[t].sum+=r; map[t].cnt++; });
   const labels=Object.keys(map).sort(); if(!labels.length)return;
   const values=labels.map(t=>+(map[t].sum/map[t].cnt).toFixed(1)), counts=labels.map(t=>map[t].cnt);
   charts['timeChart']=new Chart(document.getElementById('timeChart'),{
@@ -1201,7 +1226,7 @@ function renderDayChart(campaigns) {
   destroyChart('dayChart');
   const DAY_NAMES=['일','월','화','수','목','금','토'];
   const map={};
-  campaigns.forEach(c=>{ if(!c['발송일'])return; const day=DAY_NAMES[new Date(c['발송일']).getDay()]; const r=pct(c['오픈율 (외부)']); if(r===null)return; if(!map[day])map[day]={sum:0,cnt:0}; map[day].sum+=r; map[day].cnt++; });
+  campaigns.forEach(c=>{ if(!c['발송일'])return; const day=DAY_NAMES[new Date(c['발송일']).getDay()]; const r=openRate(c); if(r===null)return; if(!map[day])map[day]={sum:0,cnt:0}; map[day].sum+=r; map[day].cnt++; });
   const labels=DAY_ORDER.filter(d=>map[d]); if(!labels.length)return;
   const values=labels.map(d=>+(map[d].sum/map[d].cnt).toFixed(1));
   const counts=labels.map(d=>map[d].cnt);
@@ -1218,7 +1243,7 @@ function renderDayChart(campaigns) {
 function renderCopyChart(emailList) {
   destroyChart('copyChart');
   const yRates=[], nRates=[];
-  COPY_ELS.forEach(el=>{ const y=emailList.filter(r=>r[el]==='Y').map(r=>pct(r['오픈율 (외부)'])).filter(v=>v!==null); const n=emailList.filter(r=>r[el]==='N').map(r=>pct(r['오픈율 (외부)'])).filter(v=>v!==null); yRates.push(avg(y)!==null?+avg(y).toFixed(1):null); nRates.push(avg(n)!==null?+avg(n).toFixed(1):null); });
+  COPY_ELS.forEach(el=>{ const y=emailList.filter(r=>r[el]==='Y').map(r=>openRateRow(r)).filter(v=>v!==null); const n=emailList.filter(r=>r[el]==='N').map(r=>openRateRow(r)).filter(v=>v!==null); yRates.push(avg(y)!==null?+avg(y).toFixed(1):null); nRates.push(avg(n)!==null?+avg(n).toFixed(1):null); });
   charts['copyChart']=new Chart(document.getElementById('copyChart'),{
     type:'bar',data:{labels:COPY_ELS,datasets:[{label:'Y (포함)',data:yRates,backgroundColor:'rgba(255,107,0,0.75)',borderRadius:4},{label:'N (미포함)',data:nRates,backgroundColor:'rgba(100,116,139,0.45)',borderRadius:4}]},
     options:{responsive:true,maintainAspectRatio:false,indexAxis:'y',scales:{x:{beginAtZero:true,max:110,grid:{color:GRID},ticks:{...AXIS,callback:v=>v+'%'}},y:{grid:{display:false},ticks:{color:'#bbb',font:{size:12}}}},plugins:{legend:{labels:{color:'#888',font:{size:12}}},tooltip:{callbacks:{label:ctx=>` ${ctx.dataset.label}: ${ctx.parsed.x!==null?ctx.parsed.x+'%':'데이터 없음'}`}}}}
@@ -1243,7 +1268,7 @@ function renderCategoryChart(filteredCampaigns) {
     charts['categoryChart']=new Chart(document.getElementById('categoryChart'),{type:'bar',data:{labels,datasets:[{label:'브랜드 카테고리별 오픈율',data:values,backgroundColor:hasCat?labels.map((_,i)=>COLORS[i%COLORS.length]+'cc'):['#2a2d35'],borderRadius:6}]},options:{responsive:true,maintainAspectRatio:false,scales:{y:{beginAtZero:true,max:110,grid:{color:GRID},ticks:{...AXIS,callback:v=>v+'%'}},x:{grid:{display:false},ticks:{color:'#bbb',font:{size:13}}}},plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>` 오픈율: ${ctx.parsed.y}%`,afterLabel:ctx=>{const d=counts[ctx.dataIndex];return ` 수신자 ${d.total}명 중 ${d.opened}명 오픈`;}}}}}}); return;
   }
   const map={};
-  allEmailList.filter(r=>filteredIds.has(r['캠페인ID'])).forEach(r=>{ const cat=r['카테고리']||''; if(!cat)return; const rate=pct(r['오픈율 (외부)']); if(rate===null)return; if(!map[cat])map[cat]={sum:0,cnt:0}; map[cat].sum+=rate; map[cat].cnt++; });
+  allEmailList.filter(r=>filteredIds.has(r['캠페인ID'])).forEach(r=>{ const cat=r['카테고리']||''; if(!cat)return; const rate=openRateRow(r); if(rate===null)return; if(!map[cat])map[cat]={sum:0,cnt:0}; map[cat].sum+=rate; map[cat].cnt++; });
   const hasCat=Object.keys(map).length>0;
   document.getElementById('cat-note').style.display=hasCat?'none':'block';
   const labels=hasCat?Object.keys(map):['카테고리 없음'];
@@ -1796,7 +1821,7 @@ function exportCategoryData(isFiltered) {
     );
   } else {
     const map = {};
-    allEmailList.filter(r=>filteredIds.has(r['캠페인ID'])).forEach(r=>{ const cat=r['카테고리']||''; if(!cat)return; const rate=pct(r['오픈율 (외부)']); if(rate===null)return; if(!map[cat])map[cat]={sum:0,cnt:0}; map[cat].sum+=rate; map[cat].cnt++; });
+    allEmailList.filter(r=>filteredIds.has(r['캠페인ID'])).forEach(r=>{ const cat=r['카테고리']||''; if(!cat)return; const rate=openRateRow(r); if(rate===null)return; if(!map[cat])map[cat]={sum:0,cnt:0}; map[cat].sum+=rate; map[cat].cnt++; });
     exportSheet(
       ['카테고리','평균 오픈율(%)','캠페인 수'],
       Object.entries(map).map(([cat,d])=>[cat, +(d.sum/d.cnt).toFixed(1), d.cnt]),
