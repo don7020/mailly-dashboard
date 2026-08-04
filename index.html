@@ -237,6 +237,15 @@ tr:hover td { background: #1a1d24; }
           <span class="section-subtitle" id="reply-count-label">–</span>
           <div class="export-btns"><button class="export-btn" onclick="exportReplyData(true)">↓ 필터 기준</button><button class="export-btn" onclick="exportReplyData(false)">↓ 전체</button></div>
         </div>
+        <div class="camp-controls">
+          <input type="text" id="reply-search" class="camp-search-input" placeholder="회사명 / 카테고리 / 캠페인ID 검색…" oninput="setReplySearch(this.value)">
+          <div class="camp-sort-chips">
+            <button id="rsort-reply-desc" class="camp-sort-chip active" onclick="setReplySort('reply-desc')">최신 회신순</button>
+            <button id="rsort-reply-asc"  class="camp-sort-chip"       onclick="setReplySort('reply-asc')">오래된 회신순</button>
+            <button id="rsort-date-desc"  class="camp-sort-chip"       onclick="setReplySort('date-desc')">발송일 최신순</button>
+            <button id="rsort-alpha"      class="camp-sort-chip"       onclick="setReplySort('alpha')">가나다순</button>
+          </div>
+        </div>
         <div class="table-wrap" id="reply-list"><div class="no-data">회신한 브랜드가 없습니다.</div></div>
         <div id="reply-pagination" class="pagination-wrap"></div>
       </div>
@@ -493,6 +502,7 @@ const PAGE_SIZE = 10;
 let filteredCampsCache = [];
 let campSearchQuery = '', campSortPreset = 'date-desc';
 let brandSearchQuery = '', brandSortPreset = 'open-desc';
+let replySearchQuery = '', replySortPreset = 'reply-desc';
 
 let allOursCampaigns = [], allAdCampaigns = [];
 let allOursRecipients = [], allAdRecipients = [];
@@ -1214,14 +1224,36 @@ function renderTop5() {
 // ═══════════════════════════════════════════════════
 // 회신 브랜드
 // ═══════════════════════════════════════════════════
+function setReplySearch(q) {
+  replySearchQuery=q.trim().toLowerCase(); replyPage=1; renderReplyList();
+}
+function setReplySort(preset) {
+  replySortPreset=preset; replyPage=1;
+  document.querySelectorAll('[id^="rsort-"]').forEach(el=>el.classList.remove('active'));
+  const el=document.getElementById('rsort-'+preset); if(el)el.classList.add('active');
+  renderReplyList();
+}
 function renderReplyList() {
-  const replied=allRecipients.filter(r=>r['구분']==='외부'&&String(r['회신여부']).trim()==='Y').sort((a,b)=>(b['최초회신일시']||'').localeCompare(a['최초회신일시']||''));
+  let replied=allRecipients.filter(r=>r['구분']==='외부'&&String(r['회신여부']).trim()==='Y');
+  // 정렬
+  switch(replySortPreset){
+    case 'reply-asc':  replied.sort((a,b)=>(a['최초회신일시']||'').localeCompare(b['최초회신일시']||'')); break;
+    case 'date-desc':  replied.sort((a,b)=>(b['캠페인ID']||'').localeCompare(a['캠페인ID']||'')); break;
+    case 'alpha':      replied.sort((a,b)=>(a['닉네임/회사명']||'').localeCompare(b['닉네임/회사명']||'')); break;
+    default:           replied.sort((a,b)=>(b['최초회신일시']||'').localeCompare(a['최초회신일시']||'')); break; // reply-desc
+  }
   document.getElementById('reply-count-label').textContent=`총 ${replied.length}건`;
+  // 검색 필터
+  let display=replied;
+  if(replySearchQuery){
+    const q=replySearchQuery;
+    display=replied.filter(r=>(r['닉네임/회사명']||'').toLowerCase().includes(q)||(r['브랜드카테고리']||'').toLowerCase().includes(q)||(r['캠페인ID']||'').toLowerCase().includes(q));
+  }
   const container=document.getElementById('reply-list');
-  if(!replied.length){container.innerHTML='<div class="no-data">아직 회신한 브랜드가 없습니다.</div>'; document.getElementById('reply-pagination').innerHTML=''; return;}
-  const total=replied.length, totalPages=Math.max(1,Math.ceil(total/PAGE_SIZE));
+  if(!display.length){container.innerHTML=`<div class="no-data">${replySearchQuery?'검색 결과가 없습니다.':'아직 회신한 브랜드가 없습니다.'}</div>`; document.getElementById('reply-pagination').innerHTML=''; return;}
+  const total=display.length, totalPages=Math.max(1,Math.ceil(total/PAGE_SIZE));
   replyPage=Math.min(replyPage,totalPages);
-  const pageItems=replied.slice((replyPage-1)*PAGE_SIZE,replyPage*PAGE_SIZE);
+  const pageItems=display.slice((replyPage-1)*PAGE_SIZE,replyPage*PAGE_SIZE);
   const rows=pageItems.map(r=>{const summary=r['회신내용요약']||''; return `<tr><td><span class="cid">${r['캠페인ID']||''}</span></td><td style="white-space:nowrap;font-size:12px">${r['발송일']||''}</td><td style="font-weight:600;color:#e8e8e8">${r['닉네임/회사명']||''}</td><td><span class="badge badge-cat">${r['브랜드카테고리']||''}</span></td><td style="white-space:nowrap;color:#4ade80;font-size:12px">${r['최초회신일시']||''}</td><td style="font-size:11px;color:#888" title="${summary}">${summary.length>45?summary.slice(0,45)+'…':summary}</td></tr>`;}).join('');
   container.innerHTML=`<table><tr><th>캠페인</th><th>발송일</th><th>회사명</th><th>카테고리</th><th>최초 회신일시</th><th>내용 요약</th></tr>${rows}</table>`;
   renderPagination('reply-pagination',total,replyPage,'setReplyPage');
