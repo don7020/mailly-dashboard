@@ -77,6 +77,14 @@ tr:hover td { background: #1a1d24; }
 .rate-mid  { color: #fbbf24; font-weight: 700; }
 .rate-low  { color: #f87171; font-weight: 700; }
 .no-data { text-align: center; color: #555; padding: 24px; font-size: 13px; }
+.camp-controls { display:flex; align-items:center; gap:12px; margin-bottom:14px; flex-wrap:wrap; }
+.camp-search-input { background:#1e2128; border:1px solid #3a3d45; color:#ccc; padding:7px 12px; border-radius:6px; font-size:13px; width:260px; outline:none; transition:border-color 0.2s; }
+.camp-search-input:focus { border-color:#ff6b00; }
+.camp-search-input::placeholder { color:#3a3d45; }
+.camp-sort-chips { display:flex; gap:5px; flex-wrap:wrap; }
+.camp-sort-chip { background:#1e2128; border:1px solid #3a3d45; color:#888; padding:5px 12px; border-radius:20px; cursor:pointer; font-size:12px; transition:all 0.15s; white-space:nowrap; }
+.camp-sort-chip:hover { border-color:#ff6b00; color:#ff8c33; }
+.camp-sort-chip.active { background:rgba(255,107,0,0.15); border-color:#ff6b00; color:#ff8c33; }
 .chart-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
 @media (max-width: 768px) { .chart-grid { grid-template-columns: 1fr; } }
 .chart-container { position: relative; height: 260px; }
@@ -190,6 +198,15 @@ tr:hover td { background: #1a1d24; }
           <div class="export-btns">
             <button class="export-btn" onclick="exportToExcel(true)">↓ 필터 기준 내보내기</button>
             <button class="export-btn" onclick="exportToExcel(false)">↓ 전체 내보내기</button>
+          </div>
+        </div>
+        <div class="camp-controls">
+          <input type="text" id="camp-search" class="camp-search-input" placeholder="캠페인ID / 이메일 제목 / 카테고리 검색…" oninput="setCampSearch(this.value)">
+          <div class="camp-sort-chips">
+            <button id="csort-date-desc" class="camp-sort-chip active" onclick="setCampSort('date-desc')">최신순</button>
+            <button id="csort-date-asc"  class="camp-sort-chip"       onclick="setCampSort('date-asc')">오래된순</button>
+            <button id="csort-open-desc" class="camp-sort-chip"       onclick="setCampSort('open-desc')">오픈율↑</button>
+            <button id="csort-alpha"     class="camp-sort-chip"       onclick="setCampSort('alpha')">가나다순</button>
           </div>
         </div>
         <div class="table-wrap"><table id="campaign-table"></table></div>
@@ -409,6 +426,15 @@ tr:hover td { background: #1a1d24; }
           <span class="section-subtitle" id="brand-count-label">–</span>
           <div class="export-btns"><button class="export-btn" onclick="exportBrandTable(true)">↓ 필터 기준</button><button class="export-btn" onclick="exportBrandTable(false)">↓ 전체</button></div>
         </div>
+        <div class="camp-controls">
+          <input type="text" id="brand-search" class="camp-search-input" placeholder="브랜드명 / 카테고리 검색…" oninput="setBrandSearch(this.value)">
+          <div class="camp-sort-chips">
+            <button id="bsort-open-desc"  class="camp-sort-chip active" onclick="setBrandSort('open-desc')">오픈율↑</button>
+            <button id="bsort-date-desc"  class="camp-sort-chip"        onclick="setBrandSort('date-desc')">최신순</button>
+            <button id="bsort-date-asc"   class="camp-sort-chip"        onclick="setBrandSort('date-asc')">오래된순</button>
+            <button id="bsort-alpha"      class="camp-sort-chip"        onclick="setBrandSort('alpha')">가나다순</button>
+          </div>
+        </div>
         <div class="table-wrap">
           <table>
             <thead id="brand-table-head"></thead>
@@ -465,6 +491,8 @@ let charts = {}, sortState = { col: null, dir: 'desc' };
 let campPage = 1, replyPage = 1;
 const PAGE_SIZE = 10;
 let filteredCampsCache = [];
+let campSearchQuery = '', campSortPreset = 'date-desc';
+let brandSearchQuery = '', brandSortPreset = 'open-desc';
 
 let allOursCampaigns = [], allAdCampaigns = [];
 let allOursRecipients = [], allAdRecipients = [];
@@ -1090,12 +1118,28 @@ function setBrandPage(p) { brandPage=p; renderBrandTable(filteredBrandsCache); }
 // ═══════════════════════════════════════════════════
 function renderTable(campaigns) {
   filteredCampsCache=campaigns;
-  if(!campaigns.length){
-    document.getElementById('campaign-table').innerHTML=`<tr><td colspan="8" class="no-data">해당 조건의 캠페인이 없습니다.</td></tr>`;
+  // 검색어 필터
+  let display=campaigns;
+  if(campSearchQuery){
+    const q=campSearchQuery;
+    display=campaigns.filter(c=>(c['캠페인ID']||'').toLowerCase().includes(q)||(c['이메일 제목']||'').toLowerCase().includes(q)||(c['카테고리']||'').toLowerCase().includes(q));
+  }
+  if(!display.length){
+    document.getElementById('campaign-table').innerHTML=`<tr><td colspan="8" class="no-data">${campSearchQuery?'검색 결과가 없습니다.':'해당 조건의 캠페인이 없습니다.'}</td></tr>`;
     document.getElementById('camp-pagination').innerHTML=''; return;
   }
-  let sorted=[...campaigns];
-  if(sortState.col) sorted.sort((a,b)=>{ const va=pct(a[sortState.col])??-1, vb=pct(b[sortState.col])??-1; return sortState.dir==='desc'?vb-va:va-vb; });
+  let sorted=[...display];
+  // 컬럼 클릭 정렬 우선 / 없으면 프리셋 정렬
+  if(sortState.col){
+    sorted.sort((a,b)=>{ const va=pct(a[sortState.col])??-1, vb=pct(b[sortState.col])??-1; return sortState.dir==='desc'?vb-va:va-vb; });
+  } else {
+    switch(campSortPreset){
+      case 'date-asc':  sorted.sort((a,b)=>a['발송일'].localeCompare(b['발송일'])); break;
+      case 'open-desc': sorted.sort((a,b)=>(openRate(b)||0)-(openRate(a)||0)); break;
+      case 'alpha':     sorted.sort((a,b)=>(a['이메일 제목']||'').localeCompare(b['이메일 제목']||'')); break;
+      default:          sorted.sort((a,b)=>b['발송일'].localeCompare(a['발송일'])); break; // date-desc
+    }
+  }
   const total=sorted.length, totalPages=Math.max(1,Math.ceil(total/PAGE_SIZE));
   campPage=Math.min(campPage,totalPages);
   const pageItems=sorted.slice((campPage-1)*PAGE_SIZE,campPage*PAGE_SIZE);
@@ -1132,8 +1176,19 @@ function renderTable(campaigns) {
   document.getElementById('campaign-table').innerHTML=head+rows;
   renderPagination('camp-pagination',total,campPage,'setCampPage');
 }
+function setCampSearch(q) {
+  campSearchQuery=q.trim().toLowerCase(); campPage=1; renderTable(filteredCampsCache);
+}
+function setCampSort(preset) {
+  campSortPreset=preset; sortState.col=null; campPage=1;
+  document.querySelectorAll('.camp-sort-chip').forEach(el=>el.classList.remove('active'));
+  const el=document.getElementById('csort-'+preset); if(el)el.classList.add('active');
+  renderTable(filteredCampsCache);
+}
 function sortBy(col) {
   sortState.col===col?(sortState.dir=sortState.dir==='desc'?'asc':'desc'):(sortState.col=col,sortState.dir='desc');
+  campSortPreset=null;
+  document.querySelectorAll('.camp-sort-chip').forEach(el=>el.classList.remove('active'));
   campPage=1; renderTable(filteredCampsCache);
 }
 
@@ -1357,12 +1412,13 @@ function buildBrandRecords() {
 function aggregateBrands(records) {
   const brandMap={};
   records.forEach(r=>{
-    if(!brandMap[r.name]) brandMap[r.name]={name:r.name,category:r.category,instaVal:'',naverVal:'',sent:0,opened:0,clicked:0,replied:0,dayCount:{},timeCount:{},copyCount:{}};
+    if(!brandMap[r.name]) brandMap[r.name]={name:r.name,category:r.category,instaVal:'',naverVal:'',sent:0,opened:0,clicked:0,replied:0,dayCount:{},timeCount:{},copyCount:{},lastSendDate:'',firstSendDate:''};
     const b=brandMap[r.name];
     b.sent++;
     if(!b.instaVal&&r.instaVal) b.instaVal=r.instaVal;
     if(!b.naverVal&&r.naverVal) b.naverVal=r.naverVal;
     if(!b.category&&r.category) b.category=r.category;
+    if(r.sendDate){ if(!b.firstSendDate||r.sendDate<b.firstSendDate) b.firstSendDate=r.sendDate; if(!b.lastSendDate||r.sendDate>b.lastSendDate) b.lastSendDate=r.sendDate; }
     if(r.opened){
       b.opened++;
       if(r.dayOfWeek) b.dayCount[r.dayOfWeek]=(b.dayCount[r.dayOfWeek]||0)+1;
@@ -1435,7 +1491,14 @@ function applyBrandFilters() {
   if(activeCats.length)      brands=brands.filter(b=>activeCats.includes(b.category));
   if(activeInstaRngs.length) brands=brands.filter(b=>activeInstaRngs.includes(b.instaRng));
   if(activeNaverRngs.length)  brands=brands.filter(b=>activeNaverRngs.includes(b.naverRng));
-  brands.sort((a,x)=>{ const {col,dir}=brandSortState, va=a[col]??-1, vb=x[col]??-1; return dir==='desc'?vb-va:va-vb; });
+  switch(brandSortPreset){
+    case 'date-desc': brands.sort((a,b)=>(b.lastSendDate||'').localeCompare(a.lastSendDate||'')); break;
+    case 'date-asc':  brands.sort((a,b)=>(a.firstSendDate||'').localeCompare(b.firstSendDate||'')); break;
+    case 'alpha':     brands.sort((a,b)=>a.name.localeCompare(b.name,'ko')); break;
+    default:          brands.sort((a,b)=>(b.openRate??-1)-(a.openRate??-1)); break; // open-desc
+  }
+  // 컬럼 클릭 정렬이 있으면 우선 적용
+  if(brandSortState.col){ brands.sort((a,x)=>{ const {col,dir}=brandSortState, va=a[col]??-1, vb=x[col]??-1; return dir==='desc'?vb-va:va-vb; }); }
   filteredBrandsCache=brands;
   // 필터된 브랜드명 기준 records 좁힘 → KPI 계산에 사용
   const filteredNames=new Set(brands.map(b=>b.name));
@@ -1451,20 +1514,36 @@ function applyBrandFilters() {
   const countEl=document.getElementById('brand-filter-count');
   if(countEl) countEl.textContent=`${brands.length}개 브랜드`;
 }
-function sortBrandBy(col){
-  brandSortState.col===col?(brandSortState.dir=brandSortState.dir==='desc'?'asc':'desc'):(brandSortState.col=col,brandSortState.dir='desc');
-  brandPage=1; applyBrandFilters();
-}
-
 // ═══════════════════════════════════════════════════
 // 브랜드 분석 탭 — 테이블 렌더
 // "최적 시간대" → "발송 시간대" (VER5)
 // 수신자마스터 오픈수/클릭수 집계 → n>=1 이면 표시
 // ═══════════════════════════════════════════════════
+function setBrandSearch(q) {
+  brandSearchQuery=q.trim().toLowerCase(); brandPage=1; renderBrandTable(filteredBrandsCache);
+}
+function setBrandSort(preset) {
+  brandSortPreset=preset; brandSortState.col=null; brandPage=1;
+  document.querySelectorAll('[id^="bsort-"]').forEach(el=>el.classList.remove('active'));
+  const el=document.getElementById('bsort-'+preset); if(el)el.classList.add('active');
+  applyBrandFilters();
+}
+function sortBrandBy(col){
+  brandSortState.col===col?(brandSortState.dir=brandSortState.dir==='desc'?'asc':'desc'):(brandSortState.col=col,brandSortState.dir='desc');
+  brandSortPreset=null;
+  document.querySelectorAll('[id^="bsort-"]').forEach(el=>el.classList.remove('active'));
+  brandPage=1; applyBrandFilters();
+}
 function renderBrandTable(brands) {
   filteredBrandsCache=brands;
+  // 검색 필터
+  let display=brands;
+  if(brandSearchQuery){
+    const q=brandSearchQuery;
+    display=brands.filter(b=>(b.name||'').toLowerCase().includes(q)||(b.category||'').toLowerCase().includes(q));
+  }
   const countEl=document.getElementById('brand-count-label');
-  if(countEl) countEl.textContent=`총 ${brands.length}개`;
+  if(countEl) countEl.textContent=`총 ${brands.length}개${display.length<brands.length?' (검색: '+display.length+'개)':''}`;
   const headerCols=[
     {label:'브랜드명',key:null},{label:'카테고리',key:null},
     {label:'인스타 규모',key:null},{label:'네이버 관심',key:null},
@@ -1477,10 +1556,10 @@ function renderBrandTable(brands) {
   ];
   document.getElementById('brand-table-head').innerHTML='<tr>'+headerCols.map(col=>{ if(!col.sort)return `<th>${col.label}</th>`; const cls=brandSortState.col===col.key?`sort-${brandSortState.dir}`:''; return `<th class="sortable ${cls}" onclick="sortBrandBy('${col.key}')">${col.label}</th>`; }).join('')+'</tr>';
   const bodyEl=document.getElementById('brand-table-body');
-  if(!brands.length){bodyEl.innerHTML=`<tr><td colspan="10" class="no-data">해당 조건의 브랜드가 없습니다.</td></tr>`; document.getElementById('brand-pagination').innerHTML=''; return;}
-  const total=brands.length, totalPages=Math.max(1,Math.ceil(total/PAGE_SIZE));
+  if(!display.length){bodyEl.innerHTML=`<tr><td colspan="10" class="no-data">${brandSearchQuery?'검색 결과가 없습니다.':'해당 조건의 브랜드가 없습니다.'}</td></tr>`; document.getElementById('brand-pagination').innerHTML=''; return;}
+  const total=display.length, totalPages=Math.max(1,Math.ceil(total/PAGE_SIZE));
   brandPage=Math.min(brandPage,totalPages);
-  const pageItems=brands.slice((brandPage-1)*PAGE_SIZE,brandPage*PAGE_SIZE);
+  const pageItems=display.slice((brandPage-1)*PAGE_SIZE,brandPage*PAGE_SIZE);
   bodyEl.innerHTML=pageItems.map(b=>{
     const bestCopyShort=b.bestCopy.length>30?b.bestCopy.slice(0,30)+'…':b.bestCopy;
     const openDisp =b.openRate !==null?b.openRate.toFixed(1)+'%':'–';
