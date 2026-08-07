@@ -393,6 +393,25 @@ tr:hover td { background: #1a1d24; }
         <div class="filter-count" id="saip-filter-count"></div>
       </div>
       <div class="kpi-grid" id="saip-kpi-grid"></div>
+      <div class="section" style="margin-bottom:20px">
+        <div class="section-title">
+          브랜드 목록
+          <span class="section-subtitle" id="saip-brand-count-label">–</span>
+        </div>
+        <div class="camp-controls">
+          <input type="text" id="saip-brand-search" class="camp-search-input" placeholder="브랜드명 / 카테고리 검색…" oninput="setSaipBrandSearch(this.value)">
+          <div class="camp-sort-chips">
+            <button id="sbsort-open-desc" class="camp-sort-chip active" onclick="setSaipBrandSort('open-desc')">오픈율↑</button>
+            <button id="sbsort-date-desc" class="camp-sort-chip"        onclick="setSaipBrandSort('date-desc')">최신순</button>
+            <button id="sbsort-date-asc"  class="camp-sort-chip"        onclick="setSaipBrandSort('date-asc')">오래된순</button>
+            <button id="sbsort-alpha"     class="camp-sort-chip"        onclick="setSaipBrandSort('alpha')">가나다순</button>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table><thead id="saip-brand-table-head"></thead><tbody id="saip-brand-table-body"></tbody></table>
+        </div>
+        <div id="saip-brand-pagination" class="pagination-wrap"></div>
+      </div>
       <div class="section">
         <div class="section-title">
           캠페인 목록
@@ -554,6 +573,11 @@ let oursPage = 1, adPage = 1, saipPage = 1;
 let oursSortState = { col: '발송일', dir: 'desc' };
 let adSortState   = { col: '발송일', dir: 'desc' };
 let saipSortState = { col: '발송일', dir: 'desc' };
+
+let allSaipBrandRecords = [], filteredSaipBrandsCache = [];
+let saipBrandPage = 1;
+let saipBrandSearchQuery = '', saipBrandSortPreset = 'open-desc';
+let saipBrandSortState = { col: null, dir: 'desc' };
 
 let allBrandRecords = [];
 let filteredBrandsCache = [];
@@ -1490,6 +1514,108 @@ function buildBrandRecords() {
     });
 }
 
+function buildSaipBrandRecords() {
+  const campMap={}, copyMap={};
+  allSaipCampaigns.forEach(c=>campMap[c['캠페인ID']]=c);
+  const DAY_NAMES=['일','월','화','수','목','금','토'];
+  allSaipBrandRecords=allSaipRecipients
+    .filter(r=>r['구분']==='외부'&&(r['닉네임/회사명']||'').trim())
+    .map(r=>{
+      const camp=campMap[r['캠페인ID']]||{};
+      const sendDate=camp['발송일']||'';
+      const date=sendDate?new Date(sendDate):null;
+      return {
+        name:     (r['닉네임/회사명']||'').trim(),
+        category: r['브랜드카테고리']||'',
+        instaVal: _findColVal(r,['인스타팔로워','인스타 팔로워','인스타팔로어','인스타 팔로어'])||'',
+        naverVal: _findColVal(r,['네이버관심고객','네이버 관심고객','네이버관심','네이버 관심'])||'',
+        sendDate,
+        timeSlot: camp['발송시간대']||'',
+        dayOfWeek:date?DAY_NAMES[date.getDay()]:'',
+        opened:   parseInt(r['오픈수'])>0,
+        clicked:  parseInt(r['클릭수'])>0,
+        replied:  String(r['회신여부']).trim()==='Y',
+        copy:     {},
+      };
+    });
+}
+
+// ─ 사입 제안 탭 브랜드 목록 함수들 ──────────────────────
+function setSaipBrandSearch(q) {
+  saipBrandSearchQuery=q.trim().toLowerCase(); saipBrandPage=1; renderSaipBrandList(filteredSaipBrandsCache);
+}
+function setSaipBrandSort(preset) {
+  saipBrandSortPreset=preset; saipBrandSortState.col=null; saipBrandPage=1;
+  document.querySelectorAll('[id^="sbsort-"]').forEach(el=>el.classList.remove('active'));
+  const el=document.getElementById('sbsort-'+preset); if(el)el.classList.add('active');
+  applySaipBrandFilters();
+}
+function applySaipBrandFilters() {
+  let brands=aggregateBrands(allSaipBrandRecords);
+  switch(saipBrandSortPreset){
+    case 'date-desc': brands.sort((a,b)=>(b.lastSendDate||'').localeCompare(a.lastSendDate||'')); break;
+    case 'date-asc':  brands.sort((a,b)=>(a.firstSendDate||'').localeCompare(b.firstSendDate||'')); break;
+    case 'alpha':     brands.sort((a,b)=>a.name.localeCompare(b.name,'ko')); break;
+    default:          brands.sort((a,b)=>(b.openRate??-1)-(a.openRate??-1)); break;
+  }
+  if(saipBrandSortState.col){ brands.sort((a,x)=>{ const {col,dir}=saipBrandSortState, va=a[col]??-1, vb=x[col]??-1; return dir==='desc'?vb-va:va-vb; }); }
+  filteredSaipBrandsCache=brands; saipBrandPage=1;
+  renderSaipBrandList(brands);
+}
+function renderSaipBrandList(brands) {
+  let display=brands;
+  if(saipBrandSearchQuery){
+    const q=saipBrandSearchQuery;
+    display=brands.filter(b=>b.name.toLowerCase().includes(q)||(b.category||'').toLowerCase().includes(q));
+  }
+  const headEl=document.getElementById('saip-brand-table-head');
+  const bodyEl=document.getElementById('saip-brand-table-body');
+  const countEl=document.getElementById('saip-brand-count-label');
+  if(!headEl||!bodyEl) return;
+  if(countEl) countEl.textContent=`총 ${display.length}개`;
+  headEl.innerHTML=`<tr>
+    <th>브랜드명</th><th>카테고리</th><th>인스타 규모</th><th>네이버 관심</th>
+    <th style="text-align:right">발송횟수</th>
+    <th class="sortable ${saipBrandSortState.col==='openRate'?'sort-'+saipBrandSortState.dir:''}" onclick="sortSaipBrandBy('openRate')">오픈율 ▼</th>
+    <th style="text-align:right">오픈수</th>
+    <th class="sortable ${saipBrandSortState.col==='clickRate'?'sort-'+saipBrandSortState.dir:''}" onclick="sortSaipBrandBy('clickRate')">클릭율</th>
+    <th style="text-align:right">클릭수</th>
+    <th style="text-align:center">최적 요일</th>
+    <th style="text-align:center">발송 시간대</th>
+    <th>최적 카피요소</th>
+  </tr>`;
+  const total=display.length, totalPages=Math.max(1,Math.ceil(total/PAGE_SIZE));
+  saipBrandPage=Math.min(saipBrandPage,totalPages);
+  const paged=display.slice((saipBrandPage-1)*PAGE_SIZE, saipBrandPage*PAGE_SIZE);
+  bodyEl.innerHTML=paged.map(b=>{
+    const openDisp=b.openRate!==null?b.openRate.toFixed(1)+'%':'–';
+    const clickDisp=b.clickRate!==null?b.clickRate.toFixed(1)+'%':'–';
+    const bestCopyShort=b.bestCopy&&b.bestCopy!=='-'?(b.bestCopy.length>20?b.bestCopy.slice(0,20)+'…':b.bestCopy):'-';
+    return `<tr>
+      <td style="font-weight:600;color:#e8e8e8">${b.name}</td>
+      <td><span class="badge ${b.category?'badge-cat':'badge-empty'}">${b.category||'미입력'}</span></td>
+      <td style="font-size:12px;color:#888">${b.instaRng||'–'}</td>
+      <td style="font-size:12px;color:#888">${b.naverRng||'–'}</td>
+      <td style="text-align:right;color:#aaa">${b.sent}</td>
+      <td class="${rateClass(b.openRate)}">${openDisp}</td>
+      <td style="color:#aaa">${b.openRate!==null?b.opened:'–'}</td>
+      <td class="${rateClass(b.clickRate)}">${clickDisp}</td>
+      <td style="color:#aaa">${b.clickRate!==null?b.clicked:'–'}</td>
+      <td style="color:#aaa;text-align:center">${b.bestDay}</td>
+      <td style="color:#aaa;text-align:center">${b.bestTime||'–'}</td>
+      <td style="font-size:11px;color:#777" title="${b.bestCopy}">${bestCopyShort}</td>
+    </tr>`;
+  }).join('')||'<tr><td colspan="12" class="no-data">데이터 없음</td></tr>';
+  renderPagination('saip-brand-pagination',total,saipBrandPage,'setSaipBrandPage');
+}
+function setSaipBrandPage(p){ saipBrandPage=p; renderSaipBrandList(filteredSaipBrandsCache); }
+function sortSaipBrandBy(col){
+  saipBrandSortState.col===col?(saipBrandSortState.dir=saipBrandSortState.dir==='desc'?'asc':'desc'):(saipBrandSortState.col=col,saipBrandSortState.dir='desc');
+  saipBrandSortPreset=null;
+  document.querySelectorAll('[id^="sbsort-"]').forEach(el=>el.classList.remove('active'));
+  saipBrandPage=1; renderSaipBrandList(filteredSaipBrandsCache);
+}
+
 function aggregateBrands(records) {
   const brandMap={};
   records.forEach(r=>{
@@ -2123,6 +2249,7 @@ async function init() {
     buildFilterUI(campaigns); applyFilters(); renderTop5(); renderReplyList();
     applySpecialFilter('ours');
     applySpecialFilter('ad');
+    buildSaipBrandRecords(); applySaipBrandFilters();
     applySpecialFilter('saip');
     buildBrandRecords(); renderBrandFilters(); applyBrandFilters();
     const now=new Date();
